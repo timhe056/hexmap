@@ -62,8 +62,9 @@ public static class HexMetrics
     public static Vector3 GetSecondSolidCorner(HexDirection direction)
         => Corners[(int)direction + 1] * SolidFactor;
 
+    /// <summary>桥接向量：从当前格子 solid corner 直达邻居 solid corner</summary>
     public static Vector3 GetBridge(HexDirection direction)
-        => (GetFirstSolidCorner(direction) + GetSecondSolidCorner(direction)) * BlendFactor;
+        => (Corners[(int)direction] + Corners[(int)direction + 1]) * BlendFactor;
 
     public static Vector3 TerraceLerp(Vector3 a, Vector3 b, int step)
     {
