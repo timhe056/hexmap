@@ -59,6 +59,15 @@ public partial class HexGrid : Node3D
     }
     private int _defaultElevation = 0;
 
+    /// <summary>运行时点击格子变色的目标颜色</summary>
+    [Export]
+    public Color TouchColor
+    {
+        get => _touchColor;
+        set => _touchColor = value;
+    }
+    private Color _touchColor = new Color(0.8f, 0.2f, 0.2f); // 默认红色
+
     // ==================== 内部状态 ====================
 
     private bool _isReady = false;
@@ -181,8 +190,8 @@ public partial class HexGrid : Node3D
     }
 
     /// <summary>
-    /// Part 1：每个格子三角化为一个实心六边形（6个扇形三角形）。
-    /// 后续 Part 会扩展为包含邻居桥接、颜色混合、海拔台阶等。
+    /// Part 2：每个格子三角化为中心扇形 + 与邻居的桥接四边形。
+    /// 桥接区域使用两个格子的顶点颜色实现颜色混合过渡。
     /// </summary>
     private void TriangulateCell(HexCell cell, SurfaceTool st)
     {
@@ -191,13 +200,51 @@ public partial class HexGrid : Node3D
 
         for (HexDirection d = HexDirection.NE; d <= HexDirection.NW; d++)
         {
-            Vector3 v1 = center + HexMetrics.GetFirstSolidCorner(d);
-            Vector3 v2 = center + HexMetrics.GetSecondSolidCorner(d);
+            TriangulateSector(d, cell, center, st);
+        }
+    }
 
-            st.SetColor(cell.Color);
-            st.AddVertex(center);
-            st.AddVertex(v1);
-            st.AddVertex(v2);
+    /// <summary>三角化一个扇区：中心三角形 + 桥接四边形（颜色混合）</summary>
+    private void TriangulateSector(HexDirection direction, HexCell cell, Vector3 center, SurfaceTool st)
+    {
+        Vector3 v1 = center + HexMetrics.GetFirstSolidCorner(direction);
+        Vector3 v2 = center + HexMetrics.GetSecondSolidCorner(direction);
+
+        // 1. 中心三角形（当前格子颜色）
+        st.SetColor(cell.Color);
+        st.AddVertex(center);
+        st.SetColor(cell.Color);
+        st.AddVertex(v1);
+        st.SetColor(cell.Color);
+        st.AddVertex(v2);
+
+        // 2. 桥接四边形（只处理 E/NE/SE，避免与邻居重复绘制）
+        if (direction <= HexDirection.SE)
+        {
+            HexCell neighbor = cell.GetNeighbor(direction);
+            if (neighbor != null)
+            {
+                Vector3 bridge = HexMetrics.GetBridge(direction);
+                Vector3 v3 = v1 + bridge;
+                Vector3 v4 = v2 + bridge;
+
+                // 四边形 v1-v2-v4-v3 拆成两个三角形，颜色渐变
+                // 三角形 1: v1(cell) → v2(cell) → v4(neighbor)
+                st.SetColor(cell.Color);
+                st.AddVertex(v1);
+                st.SetColor(cell.Color);
+                st.AddVertex(v2);
+                st.SetColor(neighbor.Color);
+                st.AddVertex(v4);
+
+                // 三角形 2: v1(cell) → v4(neighbor) → v3(neighbor)
+                st.SetColor(cell.Color);
+                st.AddVertex(v1);
+                st.SetColor(neighbor.Color);
+                st.AddVertex(v4);
+                st.SetColor(neighbor.Color);
+                st.AddVertex(v3);
+            }
         }
     }
 
@@ -241,5 +288,46 @@ public partial class HexGrid : Node3D
         GridHeight = data.Height;
         // 后续扩展：根据 data.Cells 恢复各单元格状态
         Regenerate();
+    }
+
+    // ==================== 鼠标交互（运行时） ====================
+
+    /// <summary>运行时鼠标左键点击格子，将其颜色设为 TouchColor</summary>
+    public void TouchCell(HexCell cell)
+    {
+        if (cell == null) return;
+        cell.Color = TouchColor;
+        Regenerate();
+    }
+
+    public override void _Input(InputEvent @event)
+    {
+        // 编辑器中不响应点击
+        if (Engine.IsEditorHint()) return;
+
+        if (@event is InputEventMouseButton mouseButton
+            && mouseButton.Pressed
+            && mouseButton.ButtonIndex == MouseButton.Left)
+        {
+            HandleTouch(mouseButton.Position);
+        }
+    }
+
+    private void HandleTouch(Vector2 screenPosition)
+    {
+        var camera = GetViewport().GetCamera3D();
+        if (camera == null) return;
+
+        var from = camera.ProjectRayOrigin(screenPosition);
+        var to = from + camera.ProjectRayNormal(screenPosition) * 1000f;
+
+        // 射线与 Y=0 平面相交（地形基面）
+        if (Mathf.Abs(to.Y - from.Y) < 0.001f) return;
+        float t = -from.Y / (to.Y - from.Y);
+        if (t < 0) return;
+
+        Vector3 hit = from + (to - from) * t;
+        var cell = GetCell(hit);
+        if (cell != null) TouchCell(cell);
     }
 }
