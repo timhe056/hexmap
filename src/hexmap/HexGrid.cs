@@ -113,21 +113,37 @@ public partial class HexGrid : Node3D
     {
         _cells = new HexCell[GridWidth * GridHeight];
 
+        // 预计算网格中心偏移，使网格中心对齐世界原点
+        Vector3 centerOffset = CalculateGridCenterOffset();
+
         for (int z = 0; z < GridHeight; z++)
         {
             for (int x = 0; x < GridWidth; x++)
             {
-                CreateCell(x, z);
+                CreateCell(x, z, centerOffset);
             }
         }
     }
 
-    private void CreateCell(int x, int z)
+    private Vector3 CalculateGridCenterOffset()
+    {
+        // 计算右下角格子的位置，取一半作为中心偏移
+        int lastX = GridWidth - 1;
+        int lastZ = GridHeight - 1;
+        Vector3 lastPos;
+        lastPos.X = (lastX + lastZ * 0.5f - lastZ / 2) * (HexMetrics.InnerRadius * 2f);
+        lastPos.Y = 0f;
+        lastPos.Z = lastZ * (HexMetrics.OuterRadius * 1.5f);
+        return lastPos * 0.5f;
+    }
+
+    private void CreateCell(int x, int z, Vector3 centerOffset)
     {
         Vector3 position;
         position.X = (x + z * 0.5f - z / 2) * (HexMetrics.InnerRadius * 2f);
         position.Y = 0f;
         position.Z = z * (HexMetrics.OuterRadius * 1.5f);
+        position -= centerOffset;
 
         HexCell cell = new HexCell
         {
@@ -237,13 +253,14 @@ public partial class HexGrid : Node3D
                 st.SetColor(neighbor.Color);
                 st.AddVertex(v4);
 
-                // 三角形 2: v1(cell) → v4(neighbor) → v3(neighbor)
+                // 三角形 2: v1(cell) → v3(neighbor) → v4(neighbor)
+                // 注意顶点顺序必须和三角形1保持一致（从上方看均为逆时针），法线才能统一向上
                 st.SetColor(cell.Color);
                 st.AddVertex(v1);
                 st.SetColor(neighbor.Color);
-                st.AddVertex(v4);
-                st.SetColor(neighbor.Color);
                 st.AddVertex(v3);
+                st.SetColor(neighbor.Color);
+                st.AddVertex(v4);
 
                 // 3. 角落三角形（三个格子交汇区域，只画 NE/E 避免重复）
                 if (direction <= HexDirection.E)
