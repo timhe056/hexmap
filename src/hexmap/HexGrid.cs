@@ -316,7 +316,11 @@ public partial class HexGrid : Node3D
     private void HandleTouch(Vector2 screenPosition)
     {
         var camera = GetViewport().GetCamera3D();
-        if (camera == null) return;
+        if (camera == null)
+        {
+            GD.PrintErr("[HexGrid] Camera3D is null! Make sure a Camera3D has current=true.");
+            return;
+        }
 
         var from = camera.ProjectRayOrigin(screenPosition);
         var to = from + camera.ProjectRayNormal(screenPosition) * 1000f;
@@ -328,6 +332,14 @@ public partial class HexGrid : Node3D
 
         Vector3 hit = from + (to - from) * t;
         var cell = GetCell(hit);
-        if (cell != null) TouchCell(cell);
+        if (cell != null)
+        {
+            GD.Print($"[HexGrid] Clicked cell {cell.Coordinates}");
+            TouchCell(cell);
+        }
+        else
+        {
+            GD.Print($"[HexGrid] No cell at hit position {hit}");
+        }
     }
 }
