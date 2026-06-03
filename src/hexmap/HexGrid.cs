@@ -297,7 +297,14 @@ public partial class HexGrid : Node3D
     {
         if (cell == null) return;
         cell.Color = TouchColor;
-        Regenerate();
+        Refresh(); // 只重绘 Mesh，不重建 HexCell（避免颜色被重置）
+    }
+
+    /// <summary>仅重新三角化，不重建单元格数据。用于颜色变化等轻量更新。</summary>
+    private void Refresh()
+    {
+        if (_meshInstance == null || _cells == null) return;
+        Triangulate();
     }
 
     public override void _Input(InputEvent @event)
