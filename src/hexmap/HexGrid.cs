@@ -204,7 +204,7 @@ public partial class HexGrid : Node3D
         }
     }
 
-    /// <summary>三角化一个扇区：中心三角形 + 桥接四边形（颜色混合）</summary>
+    /// <summary>三角化一个扇区：中心三角形 + 桥接四边形 + 角落三角形（颜色混合）</summary>
     private void TriangulateSector(HexDirection direction, HexCell cell, Vector3 center, SurfaceTool st)
     {
         Vector3 v1 = center + HexMetrics.GetFirstSolidCorner(direction);
@@ -244,6 +244,23 @@ public partial class HexGrid : Node3D
                 st.AddVertex(v4);
                 st.SetColor(neighbor.Color);
                 st.AddVertex(v3);
+
+                // 3. 角落三角形（三个格子交汇区域，只画 NE/E 避免重复）
+                if (direction <= HexDirection.E)
+                {
+                    HexCell nextNeighbor = cell.GetNeighbor(direction.Next());
+                    if (nextNeighbor != null)
+                    {
+                        Vector3 v5 = v2 + HexMetrics.GetBridge(direction.Next());
+
+                        st.SetColor(cell.Color);
+                        st.AddVertex(v2);
+                        st.SetColor(neighbor.Color);
+                        st.AddVertex(v4);
+                        st.SetColor(nextNeighbor.Color);
+                        st.AddVertex(v5);
+                    }
+                }
             }
         }
     }
