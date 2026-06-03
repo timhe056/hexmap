@@ -83,6 +83,7 @@ public partial class HexGrid : Node3D
         Regenerate();
     }
 
+
     // ==================== Mesh 生成 ====================
 
     private void EnsureMeshInstance()
@@ -113,21 +114,18 @@ public partial class HexGrid : Node3D
     {
         _cells = new HexCell[GridWidth * GridHeight];
 
-        // 预计算网格中心偏移，使网格中心对齐世界原点
-        Vector3 centerOffset = CalculateGridCenterOffset();
-
         for (int z = 0; z < GridHeight; z++)
         {
             for (int x = 0; x < GridWidth; x++)
             {
-                CreateCell(x, z, centerOffset);
+                CreateCell(x, z);
             }
         }
     }
 
-    private Vector3 CalculateGridCenterOffset()
+    /// <summary>计算网格中心的世界坐标（用于相机定位等外部用途）</summary>
+    public Vector3 CalculateGridCenter()
     {
-        // 计算右下角格子的位置，取一半作为中心偏移
         int lastX = GridWidth - 1;
         int lastZ = GridHeight - 1;
         Vector3 lastPos;
@@ -137,13 +135,12 @@ public partial class HexGrid : Node3D
         return lastPos * 0.5f;
     }
 
-    private void CreateCell(int x, int z, Vector3 centerOffset)
+    private void CreateCell(int x, int z)
     {
         Vector3 position;
         position.X = (x + z * 0.5f - z / 2) * (HexMetrics.InnerRadius * 2f);
         position.Y = 0f;
         position.Z = z * (HexMetrics.OuterRadius * 1.5f);
-        position -= centerOffset;
 
         // 给每个格子分配伪随机颜色，相邻格子通常不同，便于观察颜色混合效果
         Color randomColor = GetRandomColor(x, z);

@@ -1,6 +1,7 @@
-[gd_scene load_steps=3 format=3 uid="uid://dccb4ue0ohq1m"]
+[gd_scene load_steps=4 format=3 uid="uid://dccb4ue0ohq1m"]
 
 [ext_resource type="Script" path="res://src/hexmap/HexGrid.cs" id="1_hexgrid"]
+[ext_resource type="Script" path="res://src/hexmap/HexCamera.cs" id="2_hexcamera"]
 
 [sub_resource type="Environment" id="Environment_hexmap"]
 background_color = Color(0.129412, 0.14902, 0.192157, 1)
@@ -17,7 +18,8 @@ transform = Transform3D(0.866025, -0.353553, 0.353553, 0, 0.707107, 0.707107, -0
 shadow_enabled = true
 
 [node name="Camera3D" type="Camera3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.707107, 0.707107, 0, -0.707107, 0.707107, 0, 40, 40)
+script = ExtResource("2_hexcamera")
+transform = Transform3D(1, 0, 0, 0, 0.707107, 0.707107, 0, -0.707107, 0.707107, 47.6314, 40, 77.5)
 projection = 1
 size = 60
 current = true
