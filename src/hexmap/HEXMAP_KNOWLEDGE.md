@@ -69,103 +69,264 @@ public struct HexCoordinates {
 
 ## Part 2：邻居连接与颜色混合
 
-### 六方向枚举
+### 六方向枚举（Godot C#）
 ```csharp
+namespace HexMap;
+
 public enum HexDirection { NE, E, SE, SW, W, NW }
 
-public static class HexDirectionExtensions {
-    public static HexDirection Opposite(this HexDirection direction) {
-        return (int)direction < 3 ? (direction + 3) : (direction - 3);
+public static class HexDirectionExtensions
+{
+    public static HexDirection Opposite(this HexDirection direction)
+        => (int)direction < 3
+            ? (HexDirection)((int)direction + 3)
+            : (HexDirection)((int)direction - 3);
+
+    public static HexDirection Previous(this HexDirection direction)
+        => direction == HexDirection.NE
+            ? HexDirection.NW
+            : (HexDirection)((int)direction - 1);
+
+    public static HexDirection Next(this HexDirection direction)
+        => direction == HexDirection.NW
+            ? HexDirection.NE
+            : (HexDirection)((int)direction + 1);
+
+    public static HexDirection Previous2(this HexDirection direction)
+    {
+        int d = (int)direction - 2;
+        return d < (int)HexDirection.NE
+            ? (HexDirection)(d + 6)
+            : (HexDirection)d;
     }
-    public static HexDirection Previous(this HexDirection direction) {
-        return direction == HexDirection.NE ? HexDirection.NW : (direction - 1);
-    }
-    public static HexDirection Next(this HexDirection direction) {
-        return direction == HexDirection.NW ? HexDirection.NE : (direction + 1);
+
+    public static HexDirection Next2(this HexDirection direction)
+    {
+        int d = (int)direction + 2;
+        return d > (int)HexDirection.NW
+            ? (HexDirection)(d - 6)
+            : (HexDirection)d;
     }
 }
 ```
 
-### 双向邻居连接
+### 双向邻居连接（HexCell 纯数据类）
+项目中的 `HexCell` 不是 Godot Node，是纯 C# 数据类，所有实例由 `HexGrid._cells[]` 数组持有。
+
 ```csharp
-public class HexCell {
-    [SerializeField] HexCell[] neighbors;
+public class HexCell
+{
+    public HexCoordinates Coordinates { get; set; }
+    public Vector3 Position { get; set; }
+    public Color Color { get; set; } = Colors.White;
+    public int Elevation { get; set; }
 
-    public HexCell GetNeighbor(HexDirection direction) {
-        return neighbors[(int)direction];
-    }
+    public HexCell[] Neighbors { get; } = new HexCell[6];
 
-    public void SetNeighbor(HexDirection direction, HexCell cell) {
-        neighbors[(int)direction] = cell;
-        cell.neighbors[(int)direction.Opposite()] = this;
+    public HexCell GetNeighbor(HexDirection direction)
+        => Neighbors[(int)direction];
+
+    public void SetNeighbor(HexDirection direction, HexCell cell)
+    {
+        Neighbors[(int)direction] = cell;
+        cell.Neighbors[(int)direction.Opposite()] = this;
     }
 }
 ```
 
-### 网格创建时的邻居初始化
+### 网格创建时的邻居初始化（Even-R 偏移布局）
+只连 **W、SE、SW** 三个方向，其余方向由邻居在创建时反向补全。
+
 ```csharp
-void CreateCell(int x, int z, int i) {
-    // 西邻居（同排前一个）
-    if (x > 0) {
-        cell.SetNeighbor(HexDirection.W, cells[i - 1]);
+private void CreateCell(int x, int z)
+{
+    Vector3 position;
+    position.X = (x + z * 0.5f - z / 2) * (HexMetrics.InnerRadius * 2f);
+    position.Y = 0f;
+    position.Z = z * (HexMetrics.OuterRadius * 1.5f);
+
+    HexCell cell = new HexCell
+    {
+        Coordinates = HexCoordinates.FromOffsetCoordinates(x, z),
+        Position = position,
+        Color = GetRandomColor(x, z),
+        Elevation = DefaultElevation
+    };
+
+    int index = z * GridWidth + x;
+    _cells[index] = cell;
+
+    // 连接邻居
+    if (x > 0)
+    {
+        cell.SetNeighbor(HexDirection.W, _cells[index - 1]);
     }
-    // 南北方向邻居（上一排）
-    if (z > 0) {
-        if ((z & 1) == 0) { // 偶数排
-            cell.SetNeighbor(HexDirection.SE, cells[i - width]);
-            if (x > 0) {
-                cell.SetNeighbor(HexDirection.SW, cells[i - width - 1]);
-            }
-        } else { // 奇数排
-            cell.SetNeighbor(HexDirection.SW, cells[i - width]);
-            if (x < width - 1) {
-                cell.SetNeighbor(HexDirection.SE, cells[i - width + 1]);
-            }
+    if (z > 0)
+    {
+        if ((z & 1) == 0) // 偶数行
+        {
+            cell.SetNeighbor(HexDirection.SE, _cells[index - GridWidth]);
+            if (x > 0)
+                cell.SetNeighbor(HexDirection.SW, _cells[index - GridWidth - 1]);
+        }
+        else // 奇数行
+        {
+            cell.SetNeighbor(HexDirection.SW, _cells[index - GridWidth]);
+            if (x < GridWidth - 1)
+                cell.SetNeighbor(HexDirection.SE, _cells[index - GridWidth + 1]);
         }
     }
 }
 ```
 
 ### Blend Regions（混合区域）
-核心思想：每个六边形内部 75% 为纯色实心区，边缘 25% 为颜色混合区。
-```csharp
-public const float solidFactor = 0.75f;
-public const float blendFactor = 1f - solidFactor;
+核心思想：每个六边形内部 **75%** 为纯色实心区，边缘 **25%** 为颜色混合过渡区。
 
-public static Vector3 GetFirstSolidCorner(HexDirection direction) {
-    return corners[(int)direction] * solidFactor;
-}
-public static Vector3 GetSecondSolidCorner(HexDirection direction) {
-    return corners[(int)direction + 1] * solidFactor;
+```csharp
+public static class HexMetrics
+{
+    public const float SolidFactor = 0.75f;
+    public const float BlendFactor = 1f - SolidFactor; // 0.25f
+
+    public static Vector3 GetFirstSolidCorner(HexDirection direction)
+        => Corners[(int)direction] * SolidFactor;
+
+    public static Vector3 GetSecondSolidCorner(HexDirection direction)
+        => Corners[(int)direction + 1] * SolidFactor;
+
+    /// <summary>桥接向量：从当前格子 solid corner 直达邻居 solid corner</summary>
+    public static Vector3 GetBridge(HexDirection direction)
+        => (Corners[(int)direction] + Corners[(int)direction + 1]) * BlendFactor;
 }
 ```
 
-三角化时，中心到 solidCorner 形成纯色三角形，solidCorner 到 corner 形成梯形混合区：
+> **⚠️ GetBridge 修复**：最初错误用 `SolidCorners`（0.75× 半径）算桥接，导致桥接长度只有 75%，格子间出现缝隙。修正为使用原始 `Corners`（完整半径）计算。
+
+### 三角化：中心扇形 + 桥接四边形 + 角落三角形
+
+每个格子被三角化为 6 个扇区。每个扇区包含三层结构：
+
+```
+        v2(center)
+       /\
+      /  \        ← ① 中心三角形（纯色）
+     /    \
+    v1────v2      ← ② 桥接四边形（双色渐变）
+    / \    / \
+   /   \  /   \    ← ③ 角落三角形（三色混合）
+  v3───v4────v5
+```
+
 ```csharp
-void Triangulate(HexDirection direction, HexCell cell) {
-    Vector3 center = cell.transform.localPosition;
+private void TriangulateCell(HexCell cell, SurfaceTool st)
+{
+    Vector3 center = cell.Position;
+    center.Y += cell.Elevation * HexMetrics.ElevationStep;
+
+    for (HexDirection d = HexDirection.NE; d <= HexDirection.NW; d++)
+    {
+        TriangulateSector(d, cell, center, st);
+    }
+}
+
+private void TriangulateSector(HexDirection direction, HexCell cell, Vector3 center, SurfaceTool st)
+{
     Vector3 v1 = center + HexMetrics.GetFirstSolidCorner(direction);
     Vector3 v2 = center + HexMetrics.GetSecondSolidCorner(direction);
 
-    // 内部纯色三角形
-    AddTriangle(center, v1, v2);
-    AddTriangleColor(cell.color);
+    // 1. 中心三角形（当前格子颜色）
+    st.SetColor(cell.Color); st.AddVertex(center);
+    st.SetColor(cell.Color); st.AddVertex(v1);
+    st.SetColor(cell.Color); st.AddVertex(v2);
 
-    // 边缘混合梯形
-    Vector3 v3 = center + HexMetrics.GetFirstCorner(direction);
-    Vector3 v4 = center + HexMetrics.GetSecondCorner(direction);
-    AddQuad(v1, v2, v3, v4);
+    // 2. 桥接四边形（只处理 E/NE/SE，避免与邻居重复绘制）
+    if (direction <= HexDirection.SE)
+    {
+        HexCell neighbor = cell.GetNeighbor(direction);
+        if (neighbor != null)
+        {
+            Vector3 bridge = HexMetrics.GetBridge(direction);
+            Vector3 v3 = v1 + bridge;
+            Vector3 v4 = v2 + bridge;
 
-    // 颜色：中心纯色，边缘是相邻3个单元格颜色的平均
-    HexCell prevNeighbor = cell.GetNeighbor(direction.Previous()) ?? cell;
-    HexCell neighbor = cell.GetNeighbor(direction) ?? cell;
-    HexCell nextNeighbor = cell.GetNeighbor(direction.Next()) ?? cell;
+            // 四边形 v1-v2-v4-v3 拆成两个三角形
+            // 注意顶点顺序必须逆时针（CCW），法线才能向上
+            st.SetColor(cell.Color);  st.AddVertex(v1);
+            st.SetColor(neighbor.Color); st.AddVertex(v4);
+            st.SetColor(cell.Color);  st.AddVertex(v2);
 
-    AddQuadColor(
-        cell.color, cell.color,
-        (cell.color + prevNeighbor.color + neighbor.color) / 3f,
-        (cell.color + neighbor.color + nextNeighbor.color) / 3f
-    );
+            st.SetColor(cell.Color);  st.AddVertex(v1);
+            st.SetColor(neighbor.Color); st.AddVertex(v3);
+            st.SetColor(neighbor.Color); st.AddVertex(v4);
+
+            // 3. 角落三角形（三个格子交汇，只画 NE/E 避免重复）
+            if (direction <= HexDirection.E)
+            {
+                HexCell nextNeighbor = cell.GetNeighbor(direction.Next());
+                if (nextNeighbor != null)
+                {
+                    Vector3 v5 = v2 + HexMetrics.GetBridge(direction.Next());
+
+                    st.SetColor(cell.Color);       st.AddVertex(v2);
+                    st.SetColor(neighbor.Color);   st.AddVertex(v4);
+                    st.SetColor(nextNeighbor.Color); st.AddVertex(v5);
+                }
+            }
+        }
+    }
+}
+```
+
+### 鼠标点击交互
+
+**核心教训**：`TouchCell` 不能直接调用 `Regenerate()`，因为 `Regenerate()` 会调用 `CreateCells()` 重建所有 `HexCell` 实例，导致颜色被重置。必须拆分为 `Refresh()`（只 `Triangulate()`）和 `Regenerate()`（全重建）。
+
+```csharp
+public void TouchCell(HexCell cell)
+{
+    if (cell == null) return;
+    cell.Color = TouchColor;
+    Refresh(); // 只重绘 Mesh，不重建 HexCell
+}
+
+private void Refresh()
+{
+    if (_meshInstance == null || _cells == null) return;
+    Triangulate();
+}
+
+public override void _Input(InputEvent @event)
+{
+    if (Engine.IsEditorHint()) return;
+
+    if (@event is InputEventMouseButton mouseButton
+        && mouseButton.Pressed
+        && mouseButton.ButtonIndex == MouseButton.Left)
+    {
+        HandleTouch(mouseButton.Position);
+    }
+}
+
+private void HandleTouch(Vector2 screenPosition)
+{
+    var camera = GetViewport().GetCamera3D();
+    if (camera == null) return;
+
+    var from = camera.ProjectRayOrigin(screenPosition);
+    var to = from + camera.ProjectRayNormal(screenPosition) * 1000f;
+
+    // 射线与 Y=0 平面相交
+    if (Mathf.Abs(to.Y - from.Y) < 0.001f) return;
+    float t = -from.Y / (to.Y - from.Y);
+    if (t < 0) return;
+
+    Vector3 hit = from + (to - from) * t;
+    var cell = GetCell(hit);
+    if (cell != null)
+    {
+        GD.Print($"[HexGrid] Clicked cell {cell.Coordinates}");
+        TouchCell(cell);
+    }
 }
 ```
 
@@ -174,76 +335,241 @@ void Triangulate(HexDirection direction, HexCell cell) {
 ## Part 3：海拔与台阶
 
 ### 离散海拔
+
+每个格子有独立的整数海拔 `Elevation`，每级高度为 `HexMetrics.ElevationStep`（默认 5）。
+
 ```csharp
 public class HexCell {
-    int elevation = int.MinValue; // 初始值避免第一次设0时跳过刷新
-
-    public int Elevation {
-        get { return elevation; }
-        set {
-            if (elevation == value) return;
-            elevation = value;
-            Vector3 position = transform.localPosition;
-            position.y = value * HexMetrics.elevationStep;
-            transform.localPosition = position;
-
-            // UI 标签同步移动
-            Vector3 uiPosition = uiRect.localPosition;
-            uiPosition.z = elevation * -HexMetrics.elevationStep;
-            uiRect.localPosition = uiPosition;
-        }
-    }
+    public int Elevation { get; set; }
 }
 ```
 
+三角化时，格子的中心 Y 坐标根据海拔调整：
+```csharp
+Vector3 center = cell.Position;
+center.Y += cell.Elevation * HexMetrics.ElevationStep;
+```
+
 ### 边类型判断
+
 ```csharp
 public enum HexEdgeType { Flat, Slope, Cliff }
 
 public static HexEdgeType GetEdgeType(int elevation1, int elevation2) {
-    if (elevation1 == elevation2) {
-        return HexEdgeType.Flat;
-    }
-    int delta = elevation2 - elevation1;
-    if (delta == 1 || delta == -1) {
-        return HexEdgeType.Slope;
-    }
+    if (elevation1 == elevation2) return HexEdgeType.Flat;
+    int delta = elevation1 - elevation2;
+    if (delta == 1 || delta == -1) return HexEdgeType.Slope;
     return HexEdgeType.Cliff;
 }
 ```
 
 ### Terrace 台阶系统
-```csharp
-public const int terracesPerSlope = 2;
-public const int terraceSteps = terracesPerSlope * 2 + 1; // = 5
 
-public const float horizontalTerraceStepSize = 1f / terraceSteps;
-public const float verticalTerraceStepSize = 1f / (terracesPerSlope + 1);
+每个斜坡（海拔差=1）拆分为 2 个 Terrace，总共 5 步：
+
+```csharp
+public const int TerracesPerSlope = 2;
+public const int TerraceSteps = TerracesPerSlope * 2 + 1; // = 5
+public const float HorizontalTerraceStepSize = 1f / TerraceSteps;
+public const float VerticalTerraceStepSize = 1f / (TerracesPerSlope + 1);
 
 public static Vector3 TerraceLerp(Vector3 a, Vector3 b, int step) {
-    float h = step * HexMetrics.horizontalTerraceStepSize;
-    a.x += (b.x - a.x) * h;
-    a.z += (b.z - a.z) * h;
-    // 垂直方向只在奇数步变化：(step + 1) / 2 的整数除法
-    // step: 1,2,3,4 → v: 1,1,2,2
-    float v = ((step + 1) / 2) * HexMetrics.verticalTerraceStepSize;
-    a.y += (b.y - a.y) * v;
+    float h = step * HorizontalTerraceStepSize;
+    a.X += (b.X - a.X) * h;
+    a.Z += (b.Z - a.Z) * h;
+    float v = ((step + 1) / 2) * VerticalTerraceStepSize; // 整数除法！
+    a.Y += (b.Y - a.Y) * v;
     return a;
 }
 
 public static Color TerraceLerp(Color a, Color b, int step) {
-    float h = step * HexMetrics.horizontalTerraceStepSize;
-    return Color.Lerp(a, b, h);
+    float h = step * HorizontalTerraceStepSize;
+    return a.Lerp(b, h);
 }
 ```
 
-斜坡三角化：只在 Slope 类型时插入台阶，Flat 直接平面，Cliff 直接悬崖。
+> **关键**：`(step + 1) / 2` 是 **整数除法**，step=1,2,3,4 时结果分别为 1,1,2,2。垂直方向只在奇数步上升。
+
+### Edge 三角化
+
+桥接四边形根据边类型分支：
+
 ```csharp
-if (cell.GetEdgeType(direction) == HexEdgeType.Slope) {
-    TriangulateEdgeTerraces(v1, v2, cell, v3, v4, neighbor);
+HexEdgeType edgeType = cell.GetEdgeType(direction);
+if (edgeType == HexEdgeType.Slope) {
+    TriangulateEdgeTerraces(st, v1, v2, cell, v3, v4, neighbor);
 } else {
-    AddQuad(v1, v2, v3, v4);
-    AddQuadColor(cell.color, neighbor.color);
+    AddQuad(st, v1, v2, v3, v4, cell.Color, cell.Color, neighbor.Color, neighbor.Color);
+}
+```
+
+`TriangulateEdgeTerraces` 把一条边拆分为 5 段：
+
+```csharp
+private void TriangulateEdgeTerraces(SurfaceTool st,
+    Vector3 beginLeft, Vector3 beginRight, HexCell beginCell,
+    Vector3 endLeft, Vector3 endRight, HexCell endCell)
+{
+    Vector3 t1 = HexMetrics.TerraceLerp(beginLeft, endLeft, 1);
+    Vector3 t2 = HexMetrics.TerraceLerp(beginRight, endRight, 1);
+    Color tc1 = HexMetrics.TerraceLerp(beginCell.Color, endCell.Color, 1);
+    Color tc2 = HexMetrics.TerraceLerp(beginCell.Color, endCell.Color, 1);
+
+    AddQuad(st, beginLeft, beginRight, t1, t2, beginCell.Color, beginCell.Color, tc1, tc2);
+
+    for (int i = 2; i < HexMetrics.TerraceSteps; i++) {
+        Vector3 prevT1 = t1;
+        Vector3 prevT2 = t2;
+        Color prevTC1 = tc1;
+        Color prevTC2 = tc2;
+        t1 = HexMetrics.TerraceLerp(beginLeft, endLeft, i);
+        t2 = HexMetrics.TerraceLerp(beginRight, endRight, i);
+        tc1 = HexMetrics.TerraceLerp(beginCell.Color, endCell.Color, i);
+        tc2 = HexMetrics.TerraceLerp(beginCell.Color, endCell.Color, i);
+        AddQuad(st, prevT1, prevT2, t1, t2, prevTC1, prevTC2, tc1, tc2);
+    }
+
+    AddQuad(st, t1, t2, endLeft, endRight, tc1, tc2, endCell.Color, endCell.Color);
+}
+```
+
+### Terrace Corner 三角化（核心，避免缝隙）
+
+三个格子交汇的角落需要根据**最低海拔格子**作为 `bottom`，然后判断左右两边的边类型：
+
+| 组合 | 处理方式 |
+|------|---------|
+| Slope + Slope (SSF) | `TriangulateCornerTerraces`：从 bottom 向左右同时做 Terrace |
+| Slope + Flat (SFS) | `TriangulateCornerTerraces`：从 Slope 侧开始 Terrace |
+| Flat + Slope (FSS) | `TriangulateCornerTerraces`：从 Slope 侧开始 Terrace |
+| Slope + Cliff | `TriangulateCornerTerracesCliff`：一侧 Terrace，另一侧截断 |
+| Flat/Cliff + Flat/Cliff | 普通三角形 |
+
+```csharp
+private void TriangulateCorner(SurfaceTool st,
+    Vector3 bottom, HexCell bottomCell,
+    Vector3 left, HexCell leftCell,
+    Vector3 right, HexCell rightCell)
+{
+    HexEdgeType leftEdgeType = bottomCell.GetEdgeType(leftCell);
+    HexEdgeType rightEdgeType = bottomCell.GetEdgeType(rightCell);
+
+    if (leftEdgeType == HexEdgeType.Slope) {
+        if (rightEdgeType == HexEdgeType.Slope) {
+            TriangulateCornerTerraces(st, bottom, bottomCell, left, leftCell, right, rightCell);
+            return;
+        }
+        if (rightEdgeType == HexEdgeType.Flat) {
+            TriangulateCornerTerraces(st, left, leftCell, right, rightCell, bottom, bottomCell);
+            return;
+        }
+        TriangulateCornerTerracesCliff(st, bottom, bottomCell, left, leftCell, right, rightCell);
+        return;
+    }
+    if (rightEdgeType == HexEdgeType.Slope) {
+        if (leftEdgeType == HexEdgeType.Flat) {
+            TriangulateCornerTerraces(st, right, rightCell, bottom, bottomCell, left, leftCell);
+            return;
+        }
+        TriangulateCornerTerracesCliff(st, bottom, bottomCell, right, rightCell, left, leftCell);
+        return;
+    }
+
+    AddTriangle(st, bottom, left, right, bottomCell.Color, leftCell.Color, rightCell.Color);
+}
+```
+
+**调用前必须按海拔重新排序**：
+
+```csharp
+if (cell.Elevation <= neighbor.Elevation) {
+    if (cell.Elevation <= nextNeighbor.Elevation) {
+        TriangulateCorner(st, v2, cell, v4, neighbor, v5, nextNeighbor);
+    } else {
+        TriangulateCorner(st, v5, nextNeighbor, v2, cell, v4, neighbor);
+    }
+} else if (neighbor.Elevation <= nextNeighbor.Elevation) {
+    TriangulateCorner(st, v4, neighbor, v5, nextNeighbor, v2, cell);
+} else {
+    TriangulateCorner(st, v5, nextNeighbor, v2, cell, v4, neighbor);
+}
+```
+
+### Terrace Corner 实现
+
+双 Slope 情况（SSF）：从 begin 向 left/right 同时插值，中间用四边形，首尾用三角形。
+
+```csharp
+private void TriangulateCornerTerraces(SurfaceTool st,
+    Vector3 begin, HexCell beginCell,
+    Vector3 left, HexCell leftCell,
+    Vector3 right, HexCell rightCell)
+{
+    Vector3 v3 = HexMetrics.TerraceLerp(begin, left, 1);
+    Vector3 v4 = HexMetrics.TerraceLerp(begin, right, 1);
+    Color c3 = HexMetrics.TerraceLerp(beginCell.Color, leftCell.Color, 1);
+    Color c4 = HexMetrics.TerraceLerp(beginCell.Color, rightCell.Color, 1);
+
+    AddTriangle(st, begin, v3, v4, beginCell.Color, c3, c4);
+
+    for (int i = 2; i < HexMetrics.TerraceSteps; i++) {
+        Vector3 v1 = v3;
+        Vector3 v2 = v4;
+        Color c1 = c3;
+        Color c2 = c4;
+        v3 = HexMetrics.TerraceLerp(begin, left, i);
+        v4 = HexMetrics.TerraceLerp(begin, right, i);
+        c3 = HexMetrics.TerraceLerp(beginCell.Color, leftCell.Color, i);
+        c4 = HexMetrics.TerraceLerp(beginCell.Color, rightCell.Color, i);
+        AddQuad(st, v1, v2, v3, v4, c1, c2, c3, c4);
+    }
+
+    AddQuad(st, v3, v4, left, right, c3, c4, leftCell.Color, rightCell.Color);
+}
+```
+
+### Cliff 边界处理
+
+Slope + Cliff 时，在 Cliff 侧用 `Vector3.Lerp` 计算截断边界点，然后对 Slope 侧做 Terrace：
+
+```csharp
+private void TriangulateCornerTerracesCliff(SurfaceTool st,
+    Vector3 begin, HexCell beginCell,
+    Vector3 left, HexCell leftCell,
+    Vector3 right, HexCell rightCell)
+{
+    float b = 1f / (rightCell.Elevation - beginCell.Elevation);
+    Vector3 boundary = begin.Lerp(right, b);
+    Color boundaryColor = beginCell.Color.Lerp(rightCell.Color, b);
+
+    TriangulateBoundaryTriangle(st, begin, beginCell, left, leftCell, boundary, boundaryColor);
+
+    if (leftCell.GetEdgeType(rightCell) == HexEdgeType.Slope) {
+        TriangulateBoundaryTriangle(st, left, leftCell, right, rightCell, boundary, boundaryColor);
+    } else {
+        AddTriangle(st, left, right, boundary, leftCell.Color, rightCell.Color, boundaryColor);
+    }
+}
+
+private void TriangulateBoundaryTriangle(SurfaceTool st,
+    Vector3 begin, HexCell beginCell,
+    Vector3 left, HexCell leftCell,
+    Vector3 boundary, Color boundaryColor)
+{
+    Vector3 v2 = HexMetrics.TerraceLerp(begin, left, 1);
+    Color c2 = HexMetrics.TerraceLerp(beginCell.Color, leftCell.Color, 1);
+
+    AddTriangle(st, begin, v2, boundary, beginCell.Color, c2, boundaryColor);
+
+    for (int i = 2; i < HexMetrics.TerraceSteps; i++) {
+        Vector3 v1 = v2;
+        Color c1 = c2;
+        v2 = HexMetrics.TerraceLerp(begin, left, i);
+        c2 = HexMetrics.TerraceLerp(beginCell.Color, leftCell.Color, i);
+        AddTriangle(st, v1, v2, boundary, c1, c2, boundaryColor);
+    }
+
+    AddTriangle(st, v2, left, boundary, c2, leftCell.Color, boundaryColor);
 }
 ```
 
