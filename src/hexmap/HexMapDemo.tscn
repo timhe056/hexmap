@@ -1,0 +1,27 @@
+[gd_scene load_steps=3 format=3 uid="uid://dccb4ue0ohq1m"]
+
+[ext_resource type="Script" path="res://src/hexmap/HexGrid.cs" id="1_hexgrid"]
+
+[sub_resource type="Environment" id="Environment_hexmap"]
+background_color = Color(0.129412, 0.14902, 0.192157, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.5, 0.5, 0.5, 1)
+
+[node name="HexMapDemo" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_hexmap")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866025, -0.353553, 0.353553, 0, 0.707107, 0.707107, -0.5, -0.612372, 0.612372, 0, 0, 0)
+shadow_enabled = true
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.707107, 0.707107, 0, -0.707107, 0.707107, 0, 40, 40)
+projection = 1
+size = 60
+
+[node name="HexGrid" type="Node3D" parent="."]
+script = ExtResource("1_hexgrid")
+GridWidth = 6
+GridHeight = 6
