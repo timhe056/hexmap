@@ -186,13 +186,13 @@ public partial class HexGrid : Node3D
     {
         var st = new SurfaceTool();
         st.Begin(Mesh.PrimitiveType.Triangles);
+        st.SetNormal(Vector3.Up); // Part 2 所有面水平朝上，统一法线避免光照阴影
 
         for (int i = 0; i < _cells.Length; i++)
         {
             TriangulateCell(_cells[i], st);
         }
 
-        st.GenerateNormals();
         var mesh = st.Commit();
         _meshInstance.Mesh = mesh;
 
@@ -254,7 +254,6 @@ public partial class HexGrid : Node3D
                 st.AddVertex(v4);
 
                 // 三角形 2: v1(cell) → v3(neighbor) → v4(neighbor)
-                // 注意顶点顺序必须和三角形1保持一致（从上方看均为逆时针），法线才能统一向上
                 st.SetColor(cell.Color);
                 st.AddVertex(v1);
                 st.SetColor(neighbor.Color);
