@@ -145,11 +145,14 @@ public partial class HexGrid : Node3D
         position.Z = z * (HexMetrics.OuterRadius * 1.5f);
         position -= centerOffset;
 
+        // 给每个格子分配伪随机颜色，相邻格子通常不同，便于观察颜色混合效果
+        Color randomColor = GetRandomColor(x, z);
+
         HexCell cell = new HexCell
         {
             Coordinates = HexCoordinates.FromOffsetCoordinates(x, z),
             Position = position,
-            Color = GridColor,
+            Color = randomColor,
             Elevation = DefaultElevation
         };
 
@@ -186,13 +189,13 @@ public partial class HexGrid : Node3D
     {
         var st = new SurfaceTool();
         st.Begin(Mesh.PrimitiveType.Triangles);
-        st.SetNormal(Vector3.Up); // Part 2 所有面水平朝上，统一法线避免光照阴影
 
         for (int i = 0; i < _cells.Length; i++)
         {
             TriangulateCell(_cells[i], st);
         }
 
+        st.GenerateNormals();
         var mesh = st.Commit();
         _meshInstance.Mesh = mesh;
 
@@ -245,13 +248,14 @@ public partial class HexGrid : Node3D
                 Vector3 v4 = v2 + bridge;
 
                 // 四边形 v1-v2-v4-v3 拆成两个三角形，颜色渐变
-                // 三角形 1: v1(cell) → v2(cell) → v4(neighbor)
+                // 三角形 1: v1(cell) → v4(neighbor) → v2(cell)
+                // 注意顶点顺序必须逆时针（从上方看），法线才能向上
                 st.SetColor(cell.Color);
                 st.AddVertex(v1);
-                st.SetColor(cell.Color);
-                st.AddVertex(v2);
                 st.SetColor(neighbor.Color);
                 st.AddVertex(v4);
+                st.SetColor(cell.Color);
+                st.AddVertex(v2);
 
                 // 三角形 2: v1(cell) → v3(neighbor) → v4(neighbor)
                 st.SetColor(cell.Color);
@@ -279,6 +283,14 @@ public partial class HexGrid : Node3D
                 }
             }
         }
+    }
+
+    /// <summary>基于坐标生成伪随机颜色，确保相邻格子颜色不同且可复现</summary>
+    private static Color GetRandomColor(int x, int z)
+    {
+        // 用简单哈希从坐标生成色相，再转成 RGB
+        float hue = ((x * 7 + z * 13) % 360) / 360f;
+        return Color.FromHsv(hue, 0.6f, 0.9f);
     }
 
     // ==================== 工具方法 ====================
