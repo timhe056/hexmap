@@ -4,7 +4,7 @@ namespace HexMap;
 
 /// <summary>
 /// 单个六边形单元格的数据模型（纯数据类）。
-/// 后续教程会逐步添加河流、道路、水域、城墙等属性。
+/// Part 5：Color / Elevation 改为属性，变化时自动刷新所属 Chunk。
 /// </summary>
 public class HexCell
 {
@@ -13,18 +13,29 @@ public class HexCell
     public Vector3 BasePosition { get; set; }
     /// <summary>实际世界坐标（含高程 + 高程扰动）</summary>
     public Vector3 Position { get; private set; }
-    public Color Color { get; set; } = Colors.White;
 
-    public int TerrainTypeIndex { get; set; }
+    private Color _color;
+    public Color Color
+    {
+        get => _color;
+        set
+        {
+            if (_color == value) return;
+            _color = value;
+            Refresh();
+        }
+    }
 
-    private int _elevation;
+    private int _elevation = int.MinValue;
     public int Elevation
     {
         get => _elevation;
         set
         {
+            if (_elevation == value) return;
             _elevation = value;
             RefreshPosition();
+            Refresh();
         }
     }
 
@@ -56,6 +67,9 @@ public class HexCell
     public int PlantLevel { get; set; }
     public int SpecialIndex { get; set; }
 
+    /// <summary>所属 Chunk（Part 5）</summary>
+    public HexGridChunk Chunk { get; set; }
+
     public HexCell GetNeighbor(HexDirection direction) => Neighbors[(int)direction];
 
     public void SetNeighbor(HexDirection direction, HexCell cell)
@@ -83,14 +97,12 @@ public class HexCell
     {
         if (!HasOutgoingRiver) return;
         HasOutgoingRiver = false;
-        // Refresh visual...
     }
 
     public void RemoveIncomingRiver()
     {
         if (!HasIncomingRiver) return;
         HasIncomingRiver = false;
-        // Refresh visual...
     }
 
     public void RemoveRiver()
@@ -153,13 +165,30 @@ public class HexCell
         return neighbor != null && (Elevation >= neighbor.Elevation || WaterLevel == neighbor.Elevation);
     }
 
-    /// <summary>Part 4：根据 Elevation 和噪声重新计算 Position</summary>
+    /// <summary>根据 Elevation 和噪声重新计算 Position</summary>
     private void RefreshPosition()
     {
         Vector3 pos = BasePosition;
         pos.Y = _elevation * HexMetrics.ElevationStep;
         pos.Y += (HexMetrics.SampleNoise(pos).Y * 2f - 1f) * HexMetrics.ElevationPerturbStrength;
         Position = pos;
+    }
+
+    /// <summary>Part 5：刷新自身 Chunk，以及边界处邻居的 Chunk</summary>
+    private void Refresh()
+    {
+        if (Chunk != null)
+        {
+            Chunk.Refresh();
+            for (int i = 0; i < Neighbors.Length; i++)
+            {
+                HexCell neighbor = Neighbors[i];
+                if (neighbor != null && neighbor.Chunk != Chunk)
+                {
+                    neighbor.Chunk.Refresh();
+                }
+            }
+        }
     }
 
     // 用于后续 Hash Grid 特征放置

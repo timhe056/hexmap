@@ -3,8 +3,9 @@ using Godot;
 namespace HexMap;
 
 /// <summary>
-/// 六边形网格管理器。负责创建单元格、生成 Mesh、响应 Inspector 参数变化。
-/// 标记 [Tool] 以便在 Godot 编辑器中直接预览网格效果。
+/// Part 5：六边形网格管理器。
+/// 负责创建 Chunk、分配 Cell、响应 Inspector 参数变化。
+/// 三角化逻辑已提取为 public static 供 HexGridChunk 调用。
 /// </summary>
 [Tool]
 public partial class HexGrid : Node3D
@@ -12,28 +13,28 @@ public partial class HexGrid : Node3D
     // ==================== Inspector 可调参数 ====================
 
     [Export(PropertyHint.Range, "1,50,1")]
-    public int GridWidth
+    public int ChunkCountX
     {
-        get => _gridWidth;
+        get => _chunkCountX;
         set
         {
-            _gridWidth = Mathf.Max(1, value);
+            _chunkCountX = Mathf.Max(1, value);
             if (_isReady) Regenerate();
         }
     }
-    private int _gridWidth = 6;
+    private int _chunkCountX = 4;
 
     [Export(PropertyHint.Range, "1,50,1")]
-    public int GridHeight
+    public int ChunkCountZ
     {
-        get => _gridHeight;
+        get => _chunkCountZ;
         set
         {
-            _gridHeight = Mathf.Max(1, value);
+            _chunkCountZ = Mathf.Max(1, value);
             if (_isReady) Regenerate();
         }
     }
-    private int _gridHeight = 6;
+    private int _chunkCountZ = 3;
 
     [Export]
     public Color GridColor
@@ -45,7 +46,7 @@ public partial class HexGrid : Node3D
             if (_isReady) Regenerate();
         }
     }
-    private Color _gridColor = new Color(1f, 0.85f, 0.55f); // 默认沙色
+    private Color _gridColor = new Color(1f, 0.85f, 0.55f);
 
     [Export(PropertyHint.Range, "0,100,1")]
     public int DefaultElevation
@@ -59,73 +60,93 @@ public partial class HexGrid : Node3D
     }
     private int _defaultElevation = 0;
 
+    [Export(PropertyHint.Range, "0,4,1")]
+    public int BrushSize
+    {
+        get => _brushSize;
+        set => _brushSize = value;
+    }
+    private int _brushSize = 0;
+
     // ==================== 内部状态 ====================
 
     private bool _isReady = false;
-    private MeshInstance3D _meshInstance;
     private HexCell[] _cells;
+    private HexGridChunk[] _chunks;
+
+    private int CellCountX => _chunkCountX * HexMetrics.ChunkSizeX;
+    private int CellCountZ => _chunkCountZ * HexMetrics.ChunkSizeZ;
 
     // ==================== 生命周期 ====================
 
     public override void _Ready()
     {
         HexMetrics.InitializeNoise();
-        EnsureMeshInstance();
         _isReady = true;
         Regenerate();
     }
 
-    // ==================== Mesh 生成 ====================
-
-    private void EnsureMeshInstance()
-    {
-        _meshInstance = GetNodeOrNull<MeshInstance3D>("HexMesh");
-        if (_meshInstance == null)
-        {
-            _meshInstance = new MeshInstance3D();
-            _meshInstance.Name = "HexMesh";
-            AddChild(_meshInstance);
-
-            if (Engine.IsEditorHint() && GetTree()?.EditedSceneRoot != null)
-            {
-                _meshInstance.Owner = GetTree().EditedSceneRoot;
-            }
-        }
-    }
+    // ==================== 网格生成 ====================
 
     private void Regenerate()
     {
-        if (_meshInstance == null) return;
+        ClearChunks();
+        CreateChunks();
         CreateCells();
-        Triangulate();
+    }
+
+    private void ClearChunks()
+    {
+        // 清理旧 Part 遗留的 HexMesh
+        var oldMesh = GetNodeOrNull<MeshInstance3D>("HexMesh");
+        if (oldMesh != null)
+        {
+            oldMesh.QueueFree();
+        }
+
+        foreach (var child in GetChildren())
+        {
+            if (child is HexGridChunk)
+            {
+                child.QueueFree();
+            }
+        }
+        _chunks = null;
+        _cells = null;
+    }
+
+    private void CreateChunks()
+    {
+        _chunks = new HexGridChunk[_chunkCountX * _chunkCountZ];
+        for (int z = 0, i = 0; z < _chunkCountZ; z++)
+        {
+            for (int x = 0; x < _chunkCountX; x++)
+            {
+                var chunk = new HexGridChunk();
+                chunk.Name = $"Chunk_{x}_{z}";
+                AddChild(chunk);
+                if (Engine.IsEditorHint() && GetTree()?.EditedSceneRoot != null)
+                {
+                    chunk.Owner = GetTree().EditedSceneRoot;
+                }
+                _chunks[i++] = chunk;
+            }
+        }
     }
 
     private void CreateCells()
     {
-        _cells = new HexCell[GridWidth * GridHeight];
-
-        for (int z = 0; z < GridHeight; z++)
+        _cells = new HexCell[CellCountZ * CellCountX];
+        for (int z = 0, i = 0; z < CellCountZ; z++)
         {
-            for (int x = 0; x < GridWidth; x++)
+            for (int x = 0; x < CellCountX; x++)
             {
-                CreateCell(x, z);
+                CreateCell(x, z, i++);
             }
         }
     }
 
-    /// <summary>计算网格中心的世界坐标（用于相机定位等外部用途）</summary>
-    public Vector3 CalculateGridCenter()
-    {
-        int lastX = GridWidth - 1;
-        int lastZ = GridHeight - 1;
-        Vector3 lastPos;
-        lastPos.X = (lastX + lastZ * 0.5f - lastZ / 2) * (HexMetrics.InnerRadius * 2f);
-        lastPos.Y = 0f;
-        lastPos.Z = lastZ * (HexMetrics.OuterRadius * 1.5f);
-        return lastPos * 0.5f;
-    }
-
-    private void CreateCell(int x, int z)
+    private void CreateCell(int x, int z, int i)
     {
         Vector3 position;
         position.X = (x + z * 0.5f - z / 2) * (HexMetrics.InnerRadius * 2f);
@@ -141,68 +162,68 @@ public partial class HexGrid : Node3D
             Color = randomColor,
         };
 
-        int index = z * GridWidth + x;
-        _cells[index] = cell;
+        _cells[i] = cell;
 
         if (x > 0)
         {
-            cell.SetNeighbor(HexDirection.W, _cells[index - 1]);
+            cell.SetNeighbor(HexDirection.W, _cells[i - 1]);
         }
         if (z > 0)
         {
             if ((z & 1) == 0)
             {
-                cell.SetNeighbor(HexDirection.SE, _cells[index - GridWidth]);
+                cell.SetNeighbor(HexDirection.SE, _cells[i - CellCountX]);
                 if (x > 0)
                 {
-                    cell.SetNeighbor(HexDirection.SW, _cells[index - GridWidth - 1]);
+                    cell.SetNeighbor(HexDirection.SW, _cells[i - CellCountX - 1]);
                 }
             }
             else
             {
-                cell.SetNeighbor(HexDirection.SW, _cells[index - GridWidth]);
-                if (x < GridWidth - 1)
+                cell.SetNeighbor(HexDirection.SW, _cells[i - CellCountX]);
+                if (x < CellCountX - 1)
                 {
-                    cell.SetNeighbor(HexDirection.SE, _cells[index - GridWidth + 1]);
+                    cell.SetNeighbor(HexDirection.SE, _cells[i - CellCountX + 1]);
                 }
             }
         }
 
-        // Part 4：显式设置 Elevation 触发 RefreshPosition（含高程扰动）
         cell.Elevation = DefaultElevation;
+        AddCellToChunk(x, z, cell);
     }
 
-    private void Triangulate()
+    private void AddCellToChunk(int x, int z, HexCell cell)
     {
-        var st = new SurfaceTool();
-        st.Begin(Mesh.PrimitiveType.Triangles);
+        int chunkX = x / HexMetrics.ChunkSizeX;
+        int chunkZ = z / HexMetrics.ChunkSizeZ;
+        HexGridChunk chunk = _chunks[chunkX + chunkZ * _chunkCountX];
 
-        for (int i = 0; i < _cells.Length; i++)
-        {
-            TriangulateCell(_cells[i], st);
-        }
-
-        st.GenerateNormals();
-        var mesh = st.Commit();
-        _meshInstance.Mesh = mesh;
-
-        var mat = new StandardMaterial3D
-        {
-            VertexColorUseAsAlbedo = true,
-            CullMode = BaseMaterial3D.CullModeEnum.Disabled
-        };
-        _meshInstance.MaterialOverride = mat;
+        int localX = x - chunkX * HexMetrics.ChunkSizeX;
+        int localZ = z - chunkZ * HexMetrics.ChunkSizeZ;
+        chunk.AddCell(localX + localZ * HexMetrics.ChunkSizeX, cell);
     }
 
-    private void TriangulateCell(HexCell cell, SurfaceTool st)
+    /// <summary>计算网格中心的世界坐标（用于相机定位等外部用途）</summary>
+    public Vector3 CalculateGridCenter()
+    {
+        int lastX = CellCountX - 1;
+        int lastZ = CellCountZ - 1;
+        Vector3 lastPos;
+        lastPos.X = (lastX + lastZ * 0.5f - lastZ / 2) * (HexMetrics.InnerRadius * 2f);
+        lastPos.Y = 0f;
+        lastPos.Z = lastZ * (HexMetrics.OuterRadius * 1.5f);
+        return lastPos * 0.5f;
+    }
+
+    // ==================== Part 4/5：静态三角化方法 ====================
+
+    public static void TriangulateCell(HexCell cell, SurfaceTool st)
     {
         for (HexDirection d = HexDirection.NE; d <= HexDirection.NW; d++)
         {
             Triangulate(st, d, cell);
         }
     }
-
-    // ==================== Part 4：边顶点结构 ====================
 
     public struct EdgeVertices
     {
@@ -227,9 +248,7 @@ public partial class HexGrid : Node3D
         }
     }
 
-    // ==================== Part 4：顶点扰动 ====================
-
-    private Vector3 Perturb(Vector3 position)
+    private static Vector3 Perturb(Vector3 position)
     {
         Vector4 sample = HexMetrics.SampleNoise(position);
         position.X += (sample.X * 2f - 1f) * HexMetrics.CellPerturbStrength;
@@ -237,23 +256,21 @@ public partial class HexGrid : Node3D
         return position;
     }
 
-    // ==================== SurfaceTool 辅助方法 ====================
-
-    private void AddTriangle(SurfaceTool st, Vector3 v1, Vector3 v2, Vector3 v3, Color c1, Color c2, Color c3)
+    private static void AddTriangle(SurfaceTool st, Vector3 v1, Vector3 v2, Vector3 v3, Color c1, Color c2, Color c3)
     {
         st.SetColor(c1); st.AddVertex(Perturb(v1));
         st.SetColor(c2); st.AddVertex(Perturb(v2));
         st.SetColor(c3); st.AddVertex(Perturb(v3));
     }
 
-    private void AddTriangleUnperturbed(SurfaceTool st, Vector3 v1, Vector3 v2, Vector3 v3, Color c1, Color c2, Color c3)
+    private static void AddTriangleUnperturbed(SurfaceTool st, Vector3 v1, Vector3 v2, Vector3 v3, Color c1, Color c2, Color c3)
     {
         st.SetColor(c1); st.AddVertex(v1);
         st.SetColor(c2); st.AddVertex(v2);
         st.SetColor(c3); st.AddVertex(v3);
     }
 
-    private void AddQuad(SurfaceTool st, Vector3 v1, Vector3 v2, Vector3 v3, Vector3 v4, Color c1, Color c2, Color c3, Color c4)
+    private static void AddQuad(SurfaceTool st, Vector3 v1, Vector3 v2, Vector3 v3, Vector3 v4, Color c1, Color c2, Color c3, Color c4)
     {
         st.SetColor(c1); st.AddVertex(Perturb(v1));
         st.SetColor(c4); st.AddVertex(Perturb(v4));
@@ -263,7 +280,7 @@ public partial class HexGrid : Node3D
         st.SetColor(c4); st.AddVertex(Perturb(v4));
     }
 
-    private void AddQuadUnperturbed(SurfaceTool st, Vector3 v1, Vector3 v2, Vector3 v3, Vector3 v4, Color c1, Color c2, Color c3, Color c4)
+    private static void AddQuadUnperturbed(SurfaceTool st, Vector3 v1, Vector3 v2, Vector3 v3, Vector3 v4, Color c1, Color c2, Color c3, Color c4)
     {
         st.SetColor(c1); st.AddVertex(v1);
         st.SetColor(c4); st.AddVertex(v4);
@@ -273,9 +290,7 @@ public partial class HexGrid : Node3D
         st.SetColor(c4); st.AddVertex(v4);
     }
 
-    // ==================== Part 4：扇区与连接三角化 ====================
-
-    private void Triangulate(SurfaceTool st, HexDirection direction, HexCell cell)
+    private static void Triangulate(SurfaceTool st, HexDirection direction, HexCell cell)
     {
         Vector3 center = cell.Position;
         EdgeVertices e = new EdgeVertices(
@@ -291,21 +306,21 @@ public partial class HexGrid : Node3D
         }
     }
 
-    private void TriangulateEdgeFan(SurfaceTool st, Vector3 center, EdgeVertices edge, Color color)
+    private static void TriangulateEdgeFan(SurfaceTool st, Vector3 center, EdgeVertices edge, Color color)
     {
         AddTriangle(st, center, edge.v1, edge.v2, color, color, color);
         AddTriangle(st, center, edge.v2, edge.v3, color, color, color);
         AddTriangle(st, center, edge.v3, edge.v4, color, color, color);
     }
 
-    private void TriangulateEdgeStrip(SurfaceTool st, EdgeVertices e1, Color c1, EdgeVertices e2, Color c2)
+    private static void TriangulateEdgeStrip(SurfaceTool st, EdgeVertices e1, Color c1, EdgeVertices e2, Color c2)
     {
         AddQuad(st, e1.v1, e1.v2, e2.v1, e2.v2, c1, c1, c2, c2);
         AddQuad(st, e1.v2, e1.v3, e2.v2, e2.v3, c1, c1, c2, c2);
         AddQuad(st, e1.v3, e1.v4, e2.v3, e2.v4, c1, c1, c2, c2);
     }
 
-    private void TriangulateConnection(SurfaceTool st, HexDirection direction, HexCell cell, EdgeVertices e1)
+    private static void TriangulateConnection(SurfaceTool st, HexDirection direction, HexCell cell, EdgeVertices e1)
     {
         HexCell neighbor = cell.GetNeighbor(direction);
         if (neighbor == null) return;
@@ -354,7 +369,7 @@ public partial class HexGrid : Node3D
         }
     }
 
-    private void TriangulateEdgeTerraces(SurfaceTool st,
+    private static void TriangulateEdgeTerraces(SurfaceTool st,
         EdgeVertices begin, HexCell beginCell,
         EdgeVertices end, HexCell endCell)
     {
@@ -375,9 +390,7 @@ public partial class HexGrid : Node3D
         TriangulateEdgeStrip(st, e2, c2, end, endCell.Color);
     }
 
-    // ==================== Terrace Corner 处理（Part 3 + Part 4） ====================
-
-    private void TriangulateCorner(SurfaceTool st,
+    private static void TriangulateCorner(SurfaceTool st,
         Vector3 bottom, HexCell bottomCell,
         Vector3 left, HexCell leftCell,
         Vector3 right, HexCell rightCell)
@@ -420,11 +433,10 @@ public partial class HexGrid : Node3D
             TriangulateCornerTerracesCliff(st, left, leftCell, right, rightCell, bottom, bottomCell);
             return;
         }
-        // Flat-Flat-Flat 或 Cliff 情况：简单三角形（自动 Perturb）
         AddTriangle(st, bottom, left, right, bottomCell.Color, leftCell.Color, rightCell.Color);
     }
 
-    private void TriangulateCornerTerraces(SurfaceTool st,
+    private static void TriangulateCornerTerraces(SurfaceTool st,
         Vector3 begin, HexCell beginCell,
         Vector3 left, HexCell leftCell,
         Vector3 right, HexCell rightCell)
@@ -452,7 +464,7 @@ public partial class HexGrid : Node3D
         AddQuad(st, v3, v4, left, right, c3, c4, leftCell.Color, rightCell.Color);
     }
 
-    private void TriangulateCornerTerracesCliff(SurfaceTool st,
+    private static void TriangulateCornerTerracesCliff(SurfaceTool st,
         Vector3 begin, HexCell beginCell,
         Vector3 left, HexCell leftCell,
         Vector3 right, HexCell rightCell)
@@ -475,7 +487,7 @@ public partial class HexGrid : Node3D
         }
     }
 
-    private void TriangulateCornerCliffTerraces(SurfaceTool st,
+    private static void TriangulateCornerCliffTerraces(SurfaceTool st,
         Vector3 begin, HexCell beginCell,
         Vector3 left, HexCell leftCell,
         Vector3 right, HexCell rightCell)
@@ -498,7 +510,7 @@ public partial class HexGrid : Node3D
         }
     }
 
-    private void TriangulateBoundaryTriangle(SurfaceTool st,
+    private static void TriangulateBoundaryTriangle(SurfaceTool st,
         Vector3 begin, HexCell beginCell,
         Vector3 left, HexCell leftCell,
         Vector3 boundary, Color boundaryColor)
@@ -522,22 +534,15 @@ public partial class HexGrid : Node3D
             c2, leftCell.Color, boundaryColor);
     }
 
-    /// <summary>基于坐标生成伪随机颜色，确保相邻格子颜色不同且可复现</summary>
-    private static Color GetRandomColor(int x, int z)
-    {
-        float hue = ((x * 7 + z * 13) % 360) / 360f;
-        return Color.FromHsv(hue, 0.6f, 0.9f);
-    }
-
     // ==================== 工具方法 ====================
 
     public HexCell GetCell(HexCoordinates coordinates)
     {
         int z = coordinates.Z;
-        if (z < 0 || z >= GridHeight) return null;
+        if (z < 0 || z >= CellCountZ) return null;
         int x = coordinates.X + z / 2;
-        if (x < 0 || x >= GridWidth) return null;
-        return _cells[z * GridWidth + x];
+        if (x < 0 || x >= CellCountX) return null;
+        return _cells[x + z * CellCountX];
     }
 
     public HexCell GetCell(Vector3 position)
@@ -550,8 +555,8 @@ public partial class HexGrid : Node3D
     {
         var data = new HexMapData
         {
-            Width = GridWidth,
-            Height = GridHeight,
+            Width = CellCountX,
+            Height = CellCountZ,
             Seed = 0
         };
         return data;
@@ -560,18 +565,19 @@ public partial class HexGrid : Node3D
     public void Load(HexMapData data)
     {
         if (data == null) return;
-        GridWidth = data.Width;
-        GridHeight = data.Height;
+        _chunkCountX = Mathf.CeilToInt((float)data.Width / HexMetrics.ChunkSizeX);
+        _chunkCountZ = Mathf.CeilToInt((float)data.Height / HexMetrics.ChunkSizeZ);
         Regenerate();
     }
 
-    // ==================== 鼠标交互（运行时） ====================
-
-    private void Refresh()
+    /// <summary>基于坐标生成伪随机颜色</summary>
+    private static Color GetRandomColor(int x, int z)
     {
-        if (_meshInstance == null || _cells == null) return;
-        Triangulate();
+        float hue = ((x * 7 + z * 13) % 360) / 360f;
+        return Color.FromHsv(hue, 0.6f, 0.9f);
     }
+
+    // ==================== 鼠标交互（运行时） ====================
 
     public override void _Input(InputEvent @event)
     {
@@ -581,24 +587,49 @@ public partial class HexGrid : Node3D
         {
             if (mouseButton.ButtonIndex == MouseButton.Left)
             {
-                HandleElevation(mouseButton.Position, 1);
+                var cell = RaycastToCell(mouseButton.Position);
+                if (cell != null)
+                {
+                    EditCells(cell, 1);
+                }
             }
             else if (mouseButton.ButtonIndex == MouseButton.Right)
             {
-                HandleElevation(mouseButton.Position, -1);
+                var cell = RaycastToCell(mouseButton.Position);
+                if (cell != null)
+                {
+                    EditCells(cell, -1);
+                }
             }
         }
     }
 
-    private void HandleElevation(Vector2 screenPosition, int delta)
+    private void EditCells(HexCell center, int delta)
     {
-        var cell = RaycastToCell(screenPosition);
-        if (cell != null)
+        int centerX = center.Coordinates.X;
+        int centerZ = center.Coordinates.Z;
+
+        for (int r = 0, z = centerZ - _brushSize; z <= centerZ; z++, r++)
         {
-            cell.Elevation = Mathf.Max(0, cell.Elevation + delta);
-            GD.Print($"[HexGrid] Cell {cell.Coordinates} elevation = {cell.Elevation}");
-            Refresh();
+            for (int x = centerX - r; x <= centerX + _brushSize; x++)
+            {
+                EditCell(GetCell(new HexCoordinates(x, z)), delta);
+            }
         }
+        for (int r = 0, z = centerZ + _brushSize; z > centerZ; z--, r++)
+        {
+            for (int x = centerX - _brushSize; x <= centerX + r; x++)
+            {
+                EditCell(GetCell(new HexCoordinates(x, z)), delta);
+            }
+        }
+    }
+
+    private void EditCell(HexCell cell, int delta)
+    {
+        if (cell == null) return;
+        cell.Elevation = Mathf.Max(0, cell.Elevation + delta);
+        GD.Print($"[HexGrid] Cell {cell.Coordinates} elevation = {cell.Elevation}");
     }
 
     private HexCell RaycastToCell(Vector2 screenPosition)
