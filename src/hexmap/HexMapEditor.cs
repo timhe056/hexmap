@@ -149,11 +149,26 @@ public partial class HexMapEditor : CanvasLayer
     {
         var btn = new Button();
         btn.Text = text;
-        btn.CustomMinimumSize = new Vector2(28, 28);
-        if (index >= 0)
-        {
-            btn.Modulate = color;
-        }
+        btn.CustomMinimumSize = new Vector2(36, 36);
+
+        var styleNormal = new StyleBoxFlat();
+        styleNormal.BgColor = index >= 0 ? color : Colors.Gray;
+        styleNormal.BorderWidthBottom = 2;
+        styleNormal.BorderWidthLeft = 2;
+        styleNormal.BorderWidthRight = 2;
+        styleNormal.BorderWidthTop = 2;
+        styleNormal.BorderColor = Colors.White;
+        btn.AddThemeStyleboxOverride("normal", styleNormal);
+
+        var styleHover = new StyleBoxFlat();
+        styleHover.BgColor = index >= 0 ? color.Lightened(0.2f) : Colors.LightGray;
+        styleHover.BorderWidthBottom = 2;
+        styleHover.BorderWidthLeft = 2;
+        styleHover.BorderWidthRight = 2;
+        styleHover.BorderWidthTop = 2;
+        styleHover.BorderColor = Colors.Yellow;
+        btn.AddThemeStyleboxOverride("hover", styleHover);
+
         btn.Pressed += () => OnColorSelected(index);
         return btn;
     }
