@@ -142,7 +142,11 @@ public class HexCell
     {
         if (HasOutgoingRiver && OutgoingRiver == direction) return;
         HexCell neighbor = GetNeighbor(direction);
-        if (!IsValidRiverDestination(neighbor)) return;
+        if (!IsValidRiverDestination(neighbor))
+        {
+            GD.Print($"[HexCell] Invalid river dest: {Coordinates} -> {direction}, neighbor={neighbor?.Coordinates}, elev={Elevation}, neighborElev={neighbor?.Elevation}");
+            return;
+        }
 
         RemoveOutgoingRiver();
         if (HasIncomingRiver && IncomingRiver == direction) RemoveIncomingRiver();
@@ -155,6 +159,7 @@ public class HexCell
         neighbor.HasIncomingRiver = true;
         neighbor.IncomingRiver = direction.Opposite();
         neighbor.RefreshSelfOnly();
+        GD.Print($"[HexCell] River set: {Coordinates} -> {direction} -> {neighbor.Coordinates}");
     }
 
     public bool HasRoadThroughEdge(HexDirection direction) => Roads[(int)direction];

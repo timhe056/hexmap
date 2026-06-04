@@ -88,6 +88,23 @@ public partial class HexGridChunk : Node3D
             CullMode = BaseMaterial3D.CullModeEnum.Disabled
         };
         _meshInstance.MaterialOverride = mat;
+
+        // Debug: 打印河流 mesh 顶点数
+        int riverVertexCount = 0;
+        if (riverMesh != null)
+        {
+            var arrays = riverMesh.SurfaceGetArrays(0);
+            if (arrays.Count > 0 && arrays[0].AsGodotArray().Count > 0)
+            {
+                riverVertexCount = arrays[0].AsGodotArray().Count;
+            }
+        }
+        int riverCellCount = 0;
+        foreach (var c in _cells) if (c != null && c.HasRiver) riverCellCount++;
+        if (riverCellCount > 0)
+        {
+            GD.Print($"[HexGridChunk] Triangulate: {Name}, riverCells={riverCellCount}, riverVertices={riverVertexCount}");
+        }
     }
 
     private void EnsureMeshInstance()

@@ -358,9 +358,14 @@ public partial class HexGrid : Node3D
                 }
                 else if (_clickAnchor.HasValue)
                 {
-                    if (_clickAnchor.Value.DistanceTo(mouseButton.Position) < ClickDragThreshold)
+                    var cell = RaycastToCell(mouseButton.Position);
+                    if (_isDrag)
                     {
-                        var cell = RaycastToCell(mouseButton.Position);
+                        // 河流拖拽：使用最后一次检测到的 cell 和方向
+                        if (cell != null) EditCells(cell, false);
+                    }
+                    else if (_clickAnchor.Value.DistanceTo(mouseButton.Position) < ClickDragThreshold)
+                    {
                         if (cell != null) EditCells(cell, false);
                     }
                     _clickAnchor = null;
@@ -387,10 +392,13 @@ public partial class HexGrid : Node3D
         }
         else if (@event is InputEventMouseMotion motion)
         {
-            // 拖拽过程中取消点击判定
+            // 拖拽过程中取消点击判定（河流编辑模式下不取消，因为需要支持长拖拽）
             if (_clickAnchor.HasValue && _clickAnchor.Value.DistanceTo(motion.Position) >= ClickDragThreshold)
             {
-                _clickAnchor = null;
+                if (RiverMode == OptionalToggle.Ignore)
+                {
+                    _clickAnchor = null;
+                }
             }
 
             // Part 6: 检测拖拽方向（用于绘制河流）
@@ -403,6 +411,7 @@ public partial class HexGrid : Node3D
                     {
                         _isDrag = true;
                         _dragDirection = _previousCell.Coordinates.GetNeighborDirection(cell.Coordinates);
+                        GD.Print($"[HexGrid] Drag detected: {_previousCell.Coordinates} -> {cell.Coordinates}, direction={_dragDirection}");
                     }
                     _previousCell = cell;
                 }
@@ -460,10 +469,12 @@ public partial class HexGrid : Node3D
         if (RiverMode == OptionalToggle.No)
         {
             cell.RemoveRiver();
+            GD.Print($"[HexGrid] RemoveRiver at {cell.Coordinates}");
         }
         else if (_isDrag && RiverMode == OptionalToggle.Yes && !isRightClick)
         {
             HexCell otherCell = cell.GetNeighbor(_dragDirection.Opposite());
+            GD.Print($"[HexGrid] EditCell drag: cell={cell.Coordinates}, otherCell={otherCell?.Coordinates}, dir={_dragDirection}, isDrag={_isDrag}");
             if (otherCell != null)
             {
                 otherCell.SetOutgoingRiver(_dragDirection);
