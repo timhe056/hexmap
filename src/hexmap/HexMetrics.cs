@@ -12,13 +12,13 @@ public static class HexMetrics
     /// <summary>六边形内切圆半径 = OuterRadius * √3/2，即边到中心的距离</summary>
     public const float InnerRadius = OuterRadius * 0.866025404f;
 
-    /// <summary>实心六边形占外接圆半径的比例（0.75 = 中心75%区域）</summary>
-    public const float SolidFactor = 0.75f;
-    /// <summary>边缘混合区比例（1 - SolidFactor = 0.25），用于相邻格子颜色过渡</summary>
+    /// <summary>实心六边形占外接圆半径的比例（Part 4 调至 0.8）</summary>
+    public const float SolidFactor = 0.8f;
+    /// <summary>边缘混合区比例（1 - SolidFactor = 0.2），用于相邻格子颜色过渡</summary>
     public const float BlendFactor = 1f - SolidFactor;
 
-    /// <summary>每个海拔台阶的垂直高度。Elevation=1 时地面升高 5 个世界单位</summary>
-    public const float ElevationStep = 5f;
+    /// <summary>每个海拔台阶的垂直高度。Part 4 降至 3</summary>
+    public const float ElevationStep = 3f;
     /// <summary>河流河床下沉偏移（以台阶为单位）。河床比地面低 1 个台阶</summary>
     public const float StreamBedElevationOffset = -1f;
     /// <summary>水面下沉偏移（以台阶为单位）。水面比 WaterLevel 低 0.5 个台阶，避免与陆地硬边冲突</summary>
@@ -33,14 +33,18 @@ public static class HexMetrics
     /// <summary>斜坡垂直插值步长（Y轴），每步升高 1/(TerracesPerSlope+1)</summary>
     public const float VerticalTerraceStepSize = 1f / (TerracesPerSlope + 1);
 
-    /// <summary>顶点位置扰动强度（Part 4 不规则性），越大地形越崎岖</summary>
-    public const float CellPerturbStrength = 5f;
+    /// <summary>顶点位置扰动强度（Part 4 降至 4）</summary>
+    public const float CellPerturbStrength = 4f;
+    /// <summary>高程扰动强度（Part 4）</summary>
+    public const float ElevationPerturbStrength = 1.5f;
     /// <summary>Perlin 噪声采样缩放，越小噪声频率越低（地形越平缓）</summary>
     public const float NoiseScale = 0.003f;
     /// <summary>每个 Chunk 的宽度（格子数）</summary>
     public const int ChunkSizeX = 5;
     /// <summary>每个 Chunk 的高度（格子数）</summary>
     public const int ChunkSizeZ = 5;
+
+    private static FastNoiseLite _noise;
 
     /// <summary>六边形角点（XZ平面，Y=0）。索引0~5为六个角，索引6重复索引0方便取Next corner。</summary>
     public static readonly Vector3[] Corners = {
@@ -88,6 +92,31 @@ public static class HexMetrics
         int delta = elevation1 - elevation2;
         if (delta == 1 || delta == -1) return HexEdgeType.Slope;
         return HexEdgeType.Cliff;
+    }
+
+    /// <summary>Part 4：初始化噪声生成器</summary>
+    public static void InitializeNoise()
+    {
+        if (_noise != null) return;
+
+        _noise = new FastNoiseLite();
+        _noise.NoiseType = FastNoiseLite.NoiseTypeEnum.Perlin;
+        _noise.Seed = 12345;
+        _noise.Frequency = 1.0f;
+    }
+
+    /// <summary>Part 4：根据世界坐标采样噪声（4 通道）</summary>
+    public static Vector4 SampleNoise(Vector3 position)
+    {
+        if (_noise == null) return new Vector4(0.5f, 0.5f, 0.5f, 0.5f);
+
+        float x = position.X * NoiseScale;
+        float z = position.Z * NoiseScale;
+        float r = _noise.GetNoise2D(x, z) * 0.5f + 0.5f;
+        float g = _noise.GetNoise2D(x + 1000f, z) * 0.5f + 0.5f;
+        float b = _noise.GetNoise2D(x, z + 1000f) * 0.5f + 0.5f;
+        float a = _noise.GetNoise2D(x + 1000f, z + 1000f) * 0.5f + 0.5f;
+        return new Vector4(r, g, b, a);
     }
 }
 

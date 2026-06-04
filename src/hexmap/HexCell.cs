@@ -9,11 +9,25 @@ namespace HexMap;
 public class HexCell
 {
     public HexCoordinates Coordinates { get; set; }
-    public Vector3 Position { get; set; }
+    /// <summary>XZ 平面上的基础位置（不含高程）</summary>
+    public Vector3 BasePosition { get; set; }
+    /// <summary>实际世界坐标（含高程 + 高程扰动）</summary>
+    public Vector3 Position { get; private set; }
     public Color Color { get; set; } = Colors.White;
 
     public int TerrainTypeIndex { get; set; }
-    public int Elevation { get; set; }
+
+    private int _elevation;
+    public int Elevation
+    {
+        get => _elevation;
+        set
+        {
+            _elevation = value;
+            RefreshPosition();
+        }
+    }
+
     public int WaterLevel { get; set; }
 
     public HexCell[] Neighbors { get; } = new HexCell[6];
@@ -137,6 +151,15 @@ public class HexCell
     private bool IsValidRiverDestination(HexCell neighbor)
     {
         return neighbor != null && (Elevation >= neighbor.Elevation || WaterLevel == neighbor.Elevation);
+    }
+
+    /// <summary>Part 4：根据 Elevation 和噪声重新计算 Position</summary>
+    private void RefreshPosition()
+    {
+        Vector3 pos = BasePosition;
+        pos.Y = _elevation * HexMetrics.ElevationStep;
+        pos.Y += (HexMetrics.SampleNoise(pos).Y * 2f - 1f) * HexMetrics.ElevationPerturbStrength;
+        Position = pos;
     }
 
     // 用于后续 Hash Grid 特征放置
