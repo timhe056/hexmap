@@ -19,10 +19,15 @@ public static class HexMetrics
 
     /// <summary>每个海拔台阶的垂直高度。Part 4 降至 3</summary>
     public const float ElevationStep = 3f;
-    /// <summary>河流河床下沉偏移（以台阶为单位）。河床比地面低 1 个台阶</summary>
-    public const float StreamBedElevationOffset = -1f;
+    /// <summary>河流河床下沉偏移（以台阶为单位）。Part 6 加深至 -1.75</summary>
+    public const float StreamBedElevationOffset = -1.75f;
+    /// <summary>河流水面下沉偏移（以台阶为单位）</summary>
+    public const float RiverSurfaceElevationOffset = -0.5f;
     /// <summary>水面下沉偏移（以台阶为单位）。水面比 WaterLevel 低 0.5 个台阶，避免与陆地硬边冲突</summary>
     public const float WaterElevationOffset = -0.5f;
+
+    public const float OuterToInner = 0.866025404f;
+    public const float InnerToOuter = 1f / OuterToInner;
 
     /// <summary>每个斜坡（相邻格子海拔差=1）包含的台阶数</summary>
     public const int TerracesPerSlope = 2;
@@ -65,6 +70,9 @@ public static class HexMetrics
 
     public static Vector3 GetSecondSolidCorner(HexDirection direction)
         => Corners[(int)direction + 1] * SolidFactor;
+
+    public static Vector3 GetSolidEdgeMiddle(HexDirection direction)
+        => (Corners[(int)direction] + Corners[(int)direction + 1]) * (0.5f * SolidFactor);
 
     /// <summary>桥接向量：从当前格子 solid corner 直达邻居 solid corner</summary>
     public static Vector3 GetBridge(HexDirection direction)
