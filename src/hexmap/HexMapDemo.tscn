@@ -2,8 +2,7 @@
 
 [ext_resource type="Script" uid="uid://dvew6k1rja6ws" path="res://src/hexmap/HexGrid.cs" id="1_hexgrid"]
 [ext_resource type="Script" uid="uid://besamfe8m60hp" path="res://src/hexmap/HexCamera.cs" id="2_hexcamera"]
-[ext_resource type="Script" uid="uid://dvcacd3b8xefw" path="res://src/hexmap/HexGridChunk.cs" id="3_g4vl0"]
-[ext_resource type="Script" uid="uid://editor12345" path="res://src/hexmap/HexMapEditor.cs" id="4_editor"]
+[ext_resource type="Script" uid="uid://dhyw4yiuxcwfh" path="res://src/hexmap/HexMapEditor.cs" id="4_editor"]
 
 [sub_resource type="Environment" id="Environment_hexmap"]
 background_color = Color(0.129412, 0.14902, 0.192157, 1)
@@ -35,63 +34,3 @@ Grid = NodePath("../HexGrid")
 [node name="HexGrid" type="Node3D" parent="."]
 script = ExtResource("1_hexgrid")
 BrushSize = 1
-
-[node name="Chunk_0_0" type="Node3D" parent="HexGrid"]
-script = ExtResource("3_g4vl0")
-
-[node name="HexMesh" type="MeshInstance3D" parent="HexGrid/Chunk_0_0"]
-
-[node name="Chunk_1_0" type="Node3D" parent="HexGrid"]
-script = ExtResource("3_g4vl0")
-
-[node name="HexMesh" type="MeshInstance3D" parent="HexGrid/Chunk_1_0"]
-
-[node name="Chunk_2_0" type="Node3D" parent="HexGrid"]
-script = ExtResource("3_g4vl0")
-
-[node name="HexMesh" type="MeshInstance3D" parent="HexGrid/Chunk_2_0"]
-
-[node name="Chunk_3_0" type="Node3D" parent="HexGrid"]
-script = ExtResource("3_g4vl0")
-
-[node name="HexMesh" type="MeshInstance3D" parent="HexGrid/Chunk_3_0"]
-
-[node name="Chunk_0_1" type="Node3D" parent="HexGrid"]
-script = ExtResource("3_g4vl0")
-
-[node name="HexMesh" type="MeshInstance3D" parent="HexGrid/Chunk_0_1"]
-
-[node name="Chunk_1_1" type="Node3D" parent="HexGrid"]
-script = ExtResource("3_g4vl0")
-
-[node name="HexMesh" type="MeshInstance3D" parent="HexGrid/Chunk_1_1"]
-
-[node name="Chunk_2_1" type="Node3D" parent="HexGrid"]
-script = ExtResource("3_g4vl0")
-
-[node name="HexMesh" type="MeshInstance3D" parent="HexGrid/Chunk_2_1"]
-
-[node name="Chunk_3_1" type="Node3D" parent="HexGrid"]
-script = ExtResource("3_g4vl0")
-
-[node name="HexMesh" type="MeshInstance3D" parent="HexGrid/Chunk_3_1"]
-
-[node name="Chunk_0_2" type="Node3D" parent="HexGrid"]
-script = ExtResource("3_g4vl0")
-
-[node name="HexMesh" type="MeshInstance3D" parent="HexGrid/Chunk_0_2"]
-
-[node name="Chunk_1_2" type="Node3D" parent="HexGrid"]
-script = ExtResource("3_g4vl0")
-
-[node name="HexMesh" type="MeshInstance3D" parent="HexGrid/Chunk_1_2"]
-
-[node name="Chunk_2_2" type="Node3D" parent="HexGrid"]
-script = ExtResource("3_g4vl0")
-
-[node name="HexMesh" type="MeshInstance3D" parent="HexGrid/Chunk_2_2"]
-
-[node name="Chunk_3_2" type="Node3D" parent="HexGrid"]
-script = ExtResource("3_g4vl0")
-
-[node name="HexMesh" type="MeshInstance3D" parent="HexGrid/Chunk_3_2"]

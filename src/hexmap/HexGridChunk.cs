@@ -48,10 +48,10 @@ public partial class HexGridChunk : Node3D
         }
     }
 
-    /// <summary>标记需要刷新。编辑器中立即三角化，运行时延迟到 _Process</summary>
-    public void Refresh()
+    /// <summary>标记需要刷新。编辑器中立即三角化，运行时默认延迟到 _Process</summary>
+    public void Refresh(bool immediate = false)
     {
-        if (Engine.IsEditorHint())
+        if (immediate || Engine.IsEditorHint())
         {
             Triangulate();
         }

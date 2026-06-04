@@ -115,6 +115,14 @@ public partial class HexGrid : Node3D
         ClearChunks();
         CreateChunks();
         CreateCells();
+        // 初始化完成后立即三角化所有 chunk（避免运行时延迟一帧）
+        if (_chunks != null)
+        {
+            foreach (var chunk in _chunks)
+            {
+                chunk?.Refresh(immediate: true);
+            }
+        }
     }
 
     private void ClearChunks()
