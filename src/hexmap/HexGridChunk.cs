@@ -50,17 +50,7 @@ public partial class HexGridChunk : Node3D
     {
         if (_meshInstance == null) return;
 
-        var st = new SurfaceTool();
-        st.Begin(Mesh.PrimitiveType.Triangles);
-
-        for (int i = 0; i < _cells.Length; i++)
-        {
-            if (_cells[i] != null)
-                HexGrid.TriangulateCell(_cells[i], st);
-        }
-
-        st.GenerateNormals();
-        var mesh = st.Commit();
+        var mesh = HexMeshBuilder.BuildMesh(_cells);
         _meshInstance.Mesh = mesh;
 
         var mat = new StandardMaterial3D
