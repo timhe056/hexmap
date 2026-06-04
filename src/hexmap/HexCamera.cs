@@ -48,18 +48,8 @@ public partial class HexCamera : Camera3D
 
     public override void _Process(double delta)
     {
-        float zoomDelta = Input.GetAxis("Mouse ScrollWheel", "Mouse ScrollWheel");
-        // Godot 中没有默认的滚轮 axis，我们直接检测滚轮事件
-        // 这里用 _Input 处理滚轮，_Process 处理持续按键
-
         float xDelta = Input.GetAxis("ui_left", "ui_right");
         float zDelta = Input.GetAxis("ui_up", "ui_down");
-
-        // 也支持 WASD
-        if (Input.IsActionPressed("ui_left")) xDelta = -1f;
-        if (Input.IsActionPressed("ui_right")) xDelta = 1f;
-        if (Input.IsActionPressed("ui_up")) zDelta = -1f;
-        if (Input.IsActionPressed("ui_down")) zDelta = 1f;
 
         // QE 旋转
         float rotDelta = 0f;

@@ -259,27 +259,54 @@ public partial class HexGrid : Node3D
 
     // ==================== 鼠标交互（运行时） ====================
 
+    private Vector2? _clickAnchor;
+    private const float ClickDragThreshold = 10f;
+
     public override void _Input(InputEvent @event)
     {
         if (Engine.IsEditorHint()) return;
 
-        if (@event is InputEventMouseButton mouseButton && mouseButton.Pressed)
+        if (@event is InputEventMouseButton mouseButton)
         {
             if (mouseButton.ButtonIndex == MouseButton.Left)
             {
-                var cell = RaycastToCell(mouseButton.Position);
-                if (cell != null)
+                if (mouseButton.Pressed)
                 {
-                    EditCells(cell, 1);
+                    _clickAnchor = mouseButton.Position;
+                }
+                else if (_clickAnchor.HasValue)
+                {
+                    if (_clickAnchor.Value.DistanceTo(mouseButton.Position) < ClickDragThreshold)
+                    {
+                        var cell = RaycastToCell(mouseButton.Position);
+                        if (cell != null) EditCells(cell, 1);
+                    }
+                    _clickAnchor = null;
                 }
             }
             else if (mouseButton.ButtonIndex == MouseButton.Right)
             {
-                var cell = RaycastToCell(mouseButton.Position);
-                if (cell != null)
+                if (mouseButton.Pressed)
                 {
-                    EditCells(cell, -1);
+                    _clickAnchor = mouseButton.Position;
                 }
+                else if (_clickAnchor.HasValue)
+                {
+                    if (_clickAnchor.Value.DistanceTo(mouseButton.Position) < ClickDragThreshold)
+                    {
+                        var cell = RaycastToCell(mouseButton.Position);
+                        if (cell != null) EditCells(cell, -1);
+                    }
+                    _clickAnchor = null;
+                }
+            }
+        }
+        else if (@event is InputEventMouseMotion motion)
+        {
+            // 拖拽过程中取消点击判定
+            if (_clickAnchor.HasValue && _clickAnchor.Value.DistanceTo(motion.Position) >= ClickDragThreshold)
+            {
+                _clickAnchor = null;
             }
         }
     }
