@@ -54,6 +54,7 @@ public partial class HexMapEditor : CanvasLayer
         _panel.OffsetRight = -10;
         _panel.OffsetBottom = 340;
         _panel.Modulate = new Color(0, 0, 0, 0.7f);
+        _panel.MouseFilter = Control.MouseFilterEnum.Ignore; // 背景不拦截鼠标事件
         AddChild(_panel);
 
         var vbox = new VBoxContainer();
