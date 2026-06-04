@@ -76,6 +76,9 @@ public partial class HexCamera : Camera3D
                 case MouseButton.Left:
                     if (mouseButton.Pressed)
                     {
+                        // Part 6: 河流编辑模式下禁用相机拖拽
+                        if (Grid != null && Grid.RiverMode != OptionalToggle.Ignore)
+                            break;
                         _dragAnchor = GetGroundIntersection(mouseButton.Position);
                     }
                     else
@@ -97,6 +100,9 @@ public partial class HexCamera : Camera3D
         {
             if (_dragAnchor.HasValue && Input.IsMouseButtonPressed(MouseButton.Left))
             {
+                // Part 6: 河流编辑模式下禁用相机拖拽
+                if (Grid != null && Grid.RiverMode != OptionalToggle.Ignore)
+                    return;
                 var currentPoint = GetGroundIntersection(motion.Position);
                 if (currentPoint.HasValue)
                 {
