@@ -83,14 +83,16 @@ public partial class HexGrid : Node3D
     /// <summary>笔刷模式开关：开启时鼠标移动显示笔刷范围预览</summary>
     public bool BrushModeEnabled { get; set; } = false;
 
-    /// <summary>地形颜色预设</summary>
+    /// <summary>地形颜色预设（自然常用色）</summary>
     public static readonly Color[] TerrainColors = new[] {
-        new Color(1f, 0.85f, 0.55f), // 沙色
-        Colors.Yellow,
-        Colors.Green,
-        Colors.Blue,
-        Colors.Orange,
-        Colors.Red,
+        new Color(0.90f, 0.85f, 0.55f), // 沙色
+        new Color(0.35f, 0.65f, 0.25f), // 草地绿
+        new Color(0.15f, 0.45f, 0.20f), // 森林绿
+        new Color(0.25f, 0.55f, 0.75f), // 水域蓝
+        new Color(0.55f, 0.40f, 0.25f), // 泥土棕
+        new Color(0.70f, 0.70f, 0.75f), // 岩石灰
+        new Color(0.90f, 0.95f, 0.95f), // 雪地白
+        new Color(0.65f, 0.30f, 0.20f), // 熔岩红
     };
 
     // ==================== 内部状态 ====================
