@@ -35,6 +35,17 @@ public class HexCell
             if (_elevation == value) return;
             _elevation = value;
             RefreshPosition();
+
+            // Part 6: 改变高程后验证河流合法性，移除上坡河流
+            if (HasOutgoingRiver && Elevation < GetNeighbor(OutgoingRiver).Elevation)
+            {
+                RemoveOutgoingRiver();
+            }
+            if (HasIncomingRiver && Elevation > GetNeighbor(IncomingRiver).Elevation)
+            {
+                RemoveIncomingRiver();
+            }
+
             Refresh();
         }
     }
@@ -97,12 +108,28 @@ public class HexCell
     {
         if (!HasOutgoingRiver) return;
         HasOutgoingRiver = false;
+        RefreshSelfOnly();
+
+        HexCell neighbor = GetNeighbor(OutgoingRiver);
+        if (neighbor != null)
+        {
+            neighbor.HasIncomingRiver = false;
+            neighbor.RefreshSelfOnly();
+        }
     }
 
     public void RemoveIncomingRiver()
     {
         if (!HasIncomingRiver) return;
         HasIncomingRiver = false;
+        RefreshSelfOnly();
+
+        HexCell neighbor = GetNeighbor(IncomingRiver);
+        if (neighbor != null)
+        {
+            neighbor.HasOutgoingRiver = false;
+            neighbor.RefreshSelfOnly();
+        }
     }
 
     public void RemoveRiver()
@@ -122,10 +149,12 @@ public class HexCell
 
         HasOutgoingRiver = true;
         OutgoingRiver = direction;
+        RefreshSelfOnly();
 
         neighbor.RemoveIncomingRiver();
         neighbor.HasIncomingRiver = true;
         neighbor.IncomingRiver = direction.Opposite();
+        neighbor.RefreshSelfOnly();
     }
 
     public bool HasRoadThroughEdge(HexDirection direction) => Roads[(int)direction];
@@ -189,6 +218,12 @@ public class HexCell
                 }
             }
         }
+    }
+
+    /// <summary>Part 6：只刷新自身 Chunk（河流修改用，不影响邻居 Chunk）</summary>
+    private void RefreshSelfOnly()
+    {
+        Chunk?.Refresh();
     }
 
     // 用于后续 Hash Grid 特征放置

@@ -10,6 +10,7 @@ public partial class HexGridChunk : Node3D
 {
     private HexCell[] _cells;
     private MeshInstance3D _meshInstance;
+    private MeshInstance3D _riverMeshInstance;
     private bool _needsRefresh = false;
     private Label3D[] _labels;
 
@@ -28,8 +29,8 @@ public partial class HexGridChunk : Node3D
         // 创建 Label3D 显示坐标
         var label = new Label3D();
         label.Text = cell.Coordinates.ToStringOnSeparateLines();
-        label.FontSize = 64;
-        label.PixelSize = 0.08f;
+        label.FontSize = 32;
+        label.PixelSize = 0.04f;
         label.Modulate = Colors.White;
         label.OutlineSize = 8;
         label.OutlineModulate = Colors.Black;
@@ -77,8 +78,9 @@ public partial class HexGridChunk : Node3D
     {
         if (_meshInstance == null) return;
 
-        var mesh = HexMeshBuilder.BuildMesh(_cells);
-        _meshInstance.Mesh = mesh;
+        HexMeshBuilder.BuildMeshes(_cells, out Mesh terrainMesh, out Mesh riverMesh);
+        _meshInstance.Mesh = terrainMesh;
+        _riverMeshInstance.Mesh = riverMesh;
 
         var mat = new StandardMaterial3D
         {
@@ -101,5 +103,58 @@ public partial class HexGridChunk : Node3D
                 _meshInstance.Owner = GetTree().EditedSceneRoot;
             }
         }
+
+        _riverMeshInstance = GetNodeOrNull<MeshInstance3D>("Rivers");
+        if (_riverMeshInstance == null)
+        {
+            _riverMeshInstance = new MeshInstance3D();
+            _riverMeshInstance.Name = "Rivers";
+            _riverMeshInstance.MaterialOverride = CreateRiverMaterial();
+            AddChild(_riverMeshInstance);
+            if (Engine.IsEditorHint() && GetTree()?.EditedSceneRoot != null)
+            {
+                _riverMeshInstance.Owner = GetTree().EditedSceneRoot;
+            }
+        }
+    }
+
+    private static ShaderMaterial CreateRiverMaterial()
+    {
+        var shader = new Shader();
+        shader.Code = @"
+shader_type spatial;
+render_mode blend_mix, cull_disabled, unshaded;
+
+uniform vec4 color : source_color = vec4(0.15, 0.4, 0.8, 0.7);
+uniform float speed : hint_range(0.0, 2.0) = 0.25;
+uniform sampler2D noise_texture : repeat_enable;
+
+void fragment() {
+    vec2 uv = UV;
+    uv.x *= 0.0625;
+    uv.y -= TIME * speed;
+    float n = texture(noise_texture, uv).r;
+    vec3 c = clamp(color.rgb + n * 0.3, 0.0, 1.0);
+    ALBEDO = c;
+    ALPHA = clamp(color.a + n * 0.2, 0.0, 1.0);
+}
+";
+        var mat = new ShaderMaterial();
+        mat.Shader = shader;
+        mat.SetShaderParameter("color", new Color(0.15f, 0.4f, 0.8f, 0.7f));
+        mat.SetShaderParameter("speed", 0.25f);
+        // 创建噪声纹理
+        var noise = new FastNoiseLite();
+        noise.NoiseType = FastNoiseLite.NoiseTypeEnum.Perlin;
+        noise.Seed = 12345;
+        noise.Frequency = 1.0f;
+        var noiseTex = new NoiseTexture2D();
+        noiseTex.Noise = noise;
+        noiseTex.Width = 256;
+        noiseTex.Height = 256;
+        noiseTex.Normalize = true;
+        noiseTex.Seamless = true;
+        mat.SetShaderParameter("noise_texture", noiseTex);
+        return mat;
     }
 }

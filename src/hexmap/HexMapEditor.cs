@@ -37,6 +37,9 @@ public partial class HexMapEditor : CanvasLayer
     private HSlider _brushSlider;
     private CheckBox _showLabelsCheck;
     private CheckBox _brushModeCheck;
+    private Button _riverIgnoreBtn;
+    private Button _riverAddBtn;
+    private Button _riverRemoveBtn;
 
     public override void _Ready()
     {
@@ -53,8 +56,7 @@ public partial class HexMapEditor : CanvasLayer
         _panel.OffsetTop = 10;
         _panel.OffsetRight = -10;
         _panel.OffsetBottom = 340;
-        _panel.Modulate = new Color(0, 0, 0, 0.7f);
-        _panel.MouseFilter = Control.MouseFilterEnum.Ignore; // 背景不拦截鼠标事件
+        _panel.MouseFilter = Control.MouseFilterEnum.Stop; // 背景不拦截鼠标事件
         AddChild(_panel);
 
         var vbox = new VBoxContainer();
@@ -138,6 +140,21 @@ public partial class HexMapEditor : CanvasLayer
         _brushModeCheck.Toggled += OnBrushModeToggled;
         vbox.AddChild(_brushModeCheck);
 
+        // Part 6: 河流模式行
+        var riverLabel = new Label();
+        riverLabel.Text = "River";
+        vbox.AddChild(riverLabel);
+
+        var riverRow = new HBoxContainer();
+        vbox.AddChild(riverRow);
+
+        _riverIgnoreBtn = CreateRiverModeButton("Ignore", OptionalToggle.Ignore, true);
+        riverRow.AddChild(_riverIgnoreBtn);
+        _riverAddBtn = CreateRiverModeButton("Add", OptionalToggle.Yes, false);
+        riverRow.AddChild(_riverAddBtn);
+        _riverRemoveBtn = CreateRiverModeButton("Remove", OptionalToggle.No, false);
+        riverRow.AddChild(_riverRemoveBtn);
+
         // Label 显示开关
         _showLabelsCheck = new CheckBox();
         _showLabelsCheck.Text = "Show Labels";
@@ -151,24 +168,28 @@ public partial class HexMapEditor : CanvasLayer
         var btn = new Button();
         btn.Text = text;
         btn.CustomMinimumSize = new Vector2(36, 36);
+        if (index >= 0)
+        {
+            btn.Modulate = color;    
+            btn.AddThemeStyleboxOverride("normal", new StyleBoxFlat { BgColor = color });        
+        }
+        // var styleNormal = new StyleBoxFlat();
+        // styleNormal.BgColor = index >= 0 ? color : Colors.Gray;
+        // styleNormal.BorderWidthBottom = 2;
+        // styleNormal.BorderWidthLeft = 2;
+        // styleNormal.BorderWidthRight = 2;
+        // styleNormal.BorderWidthTop = 2;
+        // styleNormal.BorderColor = Colors.White;
+        // btn.AddThemeStyleboxOverride("normal", styleNormal);
 
-        var styleNormal = new StyleBoxFlat();
-        styleNormal.BgColor = index >= 0 ? color : Colors.Gray;
-        styleNormal.BorderWidthBottom = 2;
-        styleNormal.BorderWidthLeft = 2;
-        styleNormal.BorderWidthRight = 2;
-        styleNormal.BorderWidthTop = 2;
-        styleNormal.BorderColor = Colors.White;
-        btn.AddThemeStyleboxOverride("normal", styleNormal);
-
-        var styleHover = new StyleBoxFlat();
-        styleHover.BgColor = index >= 0 ? color.Lightened(0.2f) : Colors.LightGray;
-        styleHover.BorderWidthBottom = 2;
-        styleHover.BorderWidthLeft = 2;
-        styleHover.BorderWidthRight = 2;
-        styleHover.BorderWidthTop = 2;
-        styleHover.BorderColor = Colors.Yellow;
-        btn.AddThemeStyleboxOverride("hover", styleHover);
+        // var styleHover = new StyleBoxFlat();
+        // styleHover.BgColor = index >= 0 ? color.Lightened(0.2f) : Colors.LightGray;
+        // styleHover.BorderWidthBottom = 2;
+        // styleHover.BorderWidthLeft = 2;
+        // styleHover.BorderWidthRight = 2;
+        // styleHover.BorderWidthTop = 2;
+        // styleHover.BorderColor = Colors.Yellow;
+        // btn.AddThemeStyleboxOverride("hover", styleHover);
 
         btn.Pressed += () => OnColorSelected(index);
         return btn;
@@ -178,12 +199,21 @@ public partial class HexMapEditor : CanvasLayer
     {
         ActiveColorIndex = index;
         ApplyColor = index >= 0;
+        if (Grid != null)
+        {
+            Grid.ActiveColorIndex = ActiveColorIndex;
+            Grid.ApplyColor = ApplyColor;
+        }
         GD.Print($"[HexMapEditor] Color index = {index}");
     }
 
     private void OnElevationToggled(bool toggled)
     {
         ApplyElevation = toggled;
+        if (Grid != null)
+        {
+            Grid.ApplyElevation = ApplyElevation;
+        }
     }
 
     private void OnElevationChanged(double value)
@@ -209,5 +239,28 @@ public partial class HexMapEditor : CanvasLayer
         {
             Grid.BrushModeEnabled = toggled;
         }
+    }
+
+    private Button CreateRiverModeButton(string text, OptionalToggle mode, bool pressed)
+    {
+        var btn = new Button();
+        btn.Text = text;
+        btn.ToggleMode = true;
+        btn.ButtonPressed = pressed;
+        btn.CustomMinimumSize = new Vector2(60, 28);
+        btn.Pressed += () => OnRiverModeSelected(mode, btn);
+        return btn;
+    }
+
+    private void OnRiverModeSelected(OptionalToggle mode, Button sender)
+    {
+        _riverIgnoreBtn.ButtonPressed = sender == _riverIgnoreBtn;
+        _riverAddBtn.ButtonPressed = sender == _riverAddBtn;
+        _riverRemoveBtn.ButtonPressed = sender == _riverRemoveBtn;
+        if (Grid != null)
+        {
+            Grid.RiverMode = mode;
+        }
+        GD.Print($"[HexMapEditor] River mode = {mode}");
     }
 }

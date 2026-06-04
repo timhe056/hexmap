@@ -2,6 +2,9 @@ using Godot;
 
 namespace HexMap;
 
+/// <summary>Part 6：三态开关（忽略 / 是 / 否）</summary>
+public enum OptionalToggle { Ignore, Yes, No }
+
 /// <summary>
 /// Part 5：六边形网格管理器。
 /// 负责创建 Chunk、分配 Cell、响应 Inspector 参数变化。
@@ -82,6 +85,9 @@ public partial class HexGrid : Node3D
 
     /// <summary>笔刷模式开关：开启时鼠标移动显示笔刷范围预览</summary>
     public bool BrushModeEnabled { get; set; } = false;
+
+    /// <summary>Part 6：河流编辑模式</summary>
+    public OptionalToggle RiverMode { get; set; } = OptionalToggle.Ignore;
 
     /// <summary>地形颜色预设（自然常用色）</summary>
     public static readonly Color[] TerrainColors = new[] {
@@ -318,6 +324,11 @@ public partial class HexGrid : Node3D
     private Vector2? _clickAnchor;
     private const float ClickDragThreshold = 10f;
 
+    // Part 6: 拖拽绘制河流
+    private HexCell _previousCell;
+    private HexDirection _dragDirection;
+    private bool _isDrag;
+
     public override void _Input(InputEvent @event)
     {
         if (Engine.IsEditorHint()) return;
@@ -342,15 +353,19 @@ public partial class HexGrid : Node3D
                 if (mouseButton.Pressed)
                 {
                     _clickAnchor = mouseButton.Position;
+                    _previousCell = null;
+                    _isDrag = false;
                 }
                 else if (_clickAnchor.HasValue)
                 {
                     if (_clickAnchor.Value.DistanceTo(mouseButton.Position) < ClickDragThreshold)
                     {
                         var cell = RaycastToCell(mouseButton.Position);
-                        if (cell != null) EditCells(cell);
+                        if (cell != null) EditCells(cell, false);
                     }
                     _clickAnchor = null;
+                    _previousCell = null;
+                    _isDrag = false;
                 }
             }
             else if (mouseButton.ButtonIndex == MouseButton.Right)
@@ -363,13 +378,8 @@ public partial class HexGrid : Node3D
                 {
                     if (_clickAnchor.Value.DistanceTo(mouseButton.Position) < ClickDragThreshold)
                     {
-                        // 右键擦除：恢复默认颜色和高程 0
                         var cell = RaycastToCell(mouseButton.Position);
-                        if (cell != null)
-                        {
-                            if (ApplyElevation) cell.Elevation = 0;
-                            if (ApplyColor) cell.Color = Colors.White;
-                        }
+                        if (cell != null) EditCells(cell, true);
                     }
                     _clickAnchor = null;
                 }
@@ -381,6 +391,21 @@ public partial class HexGrid : Node3D
             if (_clickAnchor.HasValue && _clickAnchor.Value.DistanceTo(motion.Position) >= ClickDragThreshold)
             {
                 _clickAnchor = null;
+            }
+
+            // Part 6: 检测拖拽方向（用于绘制河流）
+            if (motion.ButtonMask.HasFlag(MouseButtonMask.Left))
+            {
+                var cell = RaycastToCell(motion.Position);
+                if (cell != null && cell != _previousCell)
+                {
+                    if (_previousCell != null)
+                    {
+                        _isDrag = true;
+                        _dragDirection = _previousCell.Coordinates.GetNeighborDirection(cell.Coordinates);
+                    }
+                    _previousCell = cell;
+                }
             }
         }
     }
@@ -411,24 +436,38 @@ public partial class HexGrid : Node3D
         return result;
     }
 
-    private void EditCells(HexCell center)
+    private void EditCells(HexCell center, bool isRightClick)
     {
         foreach (var cell in GetBrushCells(center))
         {
-            EditCell(cell);
+            EditCell(cell, isRightClick);
         }
     }
 
-    private void EditCell(HexCell cell)
+    private void EditCell(HexCell cell, bool isRightClick)
     {
         if (cell == null) return;
         if (ApplyElevation)
         {
-            cell.Elevation = ActiveElevation;
+            cell.Elevation += isRightClick ? -ActiveElevation : ActiveElevation;
         }
-        if (ApplyColor && ActiveColorIndex >= 0)
+        if (ApplyColor && ActiveColorIndex >= 0 && !isRightClick)
         {
             cell.Color = TerrainColors[ActiveColorIndex];
+        }
+
+        // Part 6: 河流编辑
+        if (RiverMode == OptionalToggle.No)
+        {
+            cell.RemoveRiver();
+        }
+        else if (_isDrag && RiverMode == OptionalToggle.Yes && !isRightClick)
+        {
+            HexCell otherCell = cell.GetNeighbor(_dragDirection.Opposite());
+            if (otherCell != null)
+            {
+                otherCell.SetOutgoingRiver(_dragDirection);
+            }
         }
     }
 
@@ -472,12 +511,16 @@ public partial class HexGrid : Node3D
         var st = new SurfaceTool();
         st.Begin(Mesh.PrimitiveType.Triangles);
 
+        Color baseColor = ApplyColor && ActiveColorIndex >= 0
+            ? TerrainColors[ActiveColorIndex]
+            : new Color(0.3f, 1f, 0.3f);
+        Color c = new Color(baseColor.R, baseColor.G, baseColor.B, 0.4f);
+
         foreach (var cell in cells)
         {
             if (cell == null) continue;
             Vector3 center = cell.Position;
             center.Y += 0.15f;
-            Color c = new Color(0.3f, 1f, 0.3f, 0.4f);
 
             for (HexDirection d = HexDirection.NE; d <= HexDirection.NW; d++)
             {

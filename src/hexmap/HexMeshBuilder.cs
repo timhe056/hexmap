@@ -34,32 +34,42 @@ public static class HexMeshBuilder
 
     // ==================== 公共入口 ====================
 
-    public static Mesh BuildMesh(HexCell[] cells)
+    public static void BuildMeshes(HexCell[] cells, out Mesh terrainMesh, out Mesh riverMesh)
     {
-        var st = new SurfaceTool();
-        st.Begin(Mesh.PrimitiveType.Triangles);
+        var terrainSt = new SurfaceTool();
+        var riverSt = new SurfaceTool();
+        terrainSt.Begin(Mesh.PrimitiveType.Triangles);
+        riverSt.Begin(Mesh.PrimitiveType.Triangles);
 
         for (int i = 0; i < cells.Length; i++)
         {
             if (cells[i] != null)
-                TriangulateCell(cells[i], st);
+                TriangulateCell(cells[i], terrainSt, riverSt);
         }
 
-        st.GenerateNormals();
-        return st.Commit();
+        terrainSt.GenerateNormals();
+        riverSt.GenerateNormals();
+        terrainMesh = terrainSt.Commit();
+        riverMesh = riverSt.Commit();
+    }
+
+    public static Mesh BuildMesh(HexCell[] cells)
+    {
+        BuildMeshes(cells, out Mesh terrainMesh, out _);
+        return terrainMesh;
     }
 
     // ==================== Cell / Sector ====================
 
-    private static void TriangulateCell(HexCell cell, SurfaceTool st)
+    private static void TriangulateCell(HexCell cell, SurfaceTool terrainSt, SurfaceTool riverSt)
     {
         for (HexDirection d = HexDirection.NE; d <= HexDirection.NW; d++)
         {
-            Triangulate(st, d, cell);
+            Triangulate(terrainSt, riverSt, d, cell);
         }
     }
 
-    private static void Triangulate(SurfaceTool st, HexDirection direction, HexCell cell)
+    private static void Triangulate(SurfaceTool terrainSt, SurfaceTool riverSt, HexDirection direction, HexCell cell)
     {
         Vector3 center = cell.Position;
         EdgeVertices e = new EdgeVertices(
@@ -67,11 +77,26 @@ public static class HexMeshBuilder
             center + HexMetrics.GetSecondSolidCorner(direction)
         );
 
-        TriangulateEdgeFan(st, center, e, cell.Color);
+        if (cell.HasRiver)
+        {
+            if (cell.HasRiverThroughEdge(direction))
+            {
+                e.v3.Y = cell.StreamBedY;
+                TriangulateWithRiver(terrainSt, riverSt, direction, cell, center, e);
+            }
+            else
+            {
+                TriangulateEdgeFan(terrainSt, center, e, cell.Color);
+            }
+        }
+        else
+        {
+            TriangulateEdgeFan(terrainSt, center, e, cell.Color);
+        }
 
         if (direction <= HexDirection.SE)
         {
-            TriangulateConnection(st, direction, cell, e);
+            TriangulateConnection(terrainSt, riverSt, direction, cell, e);
         }
     }
 
@@ -137,7 +162,7 @@ public static class HexMeshBuilder
         AddQuad(st, e1.v3, e1.v4, e2.v3, e2.v4, c1, c1, c2, c2);
     }
 
-    private static void TriangulateConnection(SurfaceTool st, HexDirection direction, HexCell cell, EdgeVertices e1)
+    private static void TriangulateConnection(SurfaceTool terrainSt, SurfaceTool riverSt, HexDirection direction, HexCell cell, EdgeVertices e1)
     {
         HexCell neighbor = cell.GetNeighbor(direction);
         if (neighbor == null) return;
@@ -149,13 +174,24 @@ public static class HexMeshBuilder
             e1.v4 + bridge
         );
 
+        // Part 6: 河流通过连接
+        if (cell.HasRiverThroughEdge(direction))
+        {
+            e2.v3.Y = neighbor.StreamBedY;
+            TriangulateRiverQuad(riverSt,
+                e1.v2, e1.v4, e2.v2, e2.v4,
+                cell.RiverSurfaceY, neighbor.RiverSurfaceY,
+                cell.HasIncomingRiver && cell.IncomingRiver == direction
+            );
+        }
+
         if (cell.GetEdgeType(direction) == HexEdgeType.Slope)
         {
-            TriangulateEdgeTerraces(st, e1, cell, e2, neighbor);
+            TriangulateEdgeTerraces(terrainSt, e1, cell, e2, neighbor);
         }
         else
         {
-            TriangulateEdgeStrip(st, e1, cell.Color, e2, neighbor.Color);
+            TriangulateEdgeStrip(terrainSt, e1, cell.Color, e2, neighbor.Color);
         }
 
         HexCell nextNeighbor = cell.GetNeighbor(direction.Next());
@@ -168,20 +204,20 @@ public static class HexMeshBuilder
             {
                 if (cell.Elevation <= nextNeighbor.Elevation)
                 {
-                    TriangulateCorner(st, e1.v4, cell, e2.v4, neighbor, v5, nextNeighbor);
+                    TriangulateCorner(terrainSt, e1.v4, cell, e2.v4, neighbor, v5, nextNeighbor);
                 }
                 else
                 {
-                    TriangulateCorner(st, v5, nextNeighbor, e1.v4, cell, e2.v4, neighbor);
+                    TriangulateCorner(terrainSt, v5, nextNeighbor, e1.v4, cell, e2.v4, neighbor);
                 }
             }
             else if (neighbor.Elevation <= nextNeighbor.Elevation)
             {
-                TriangulateCorner(st, e2.v4, neighbor, v5, nextNeighbor, e1.v4, cell);
+                TriangulateCorner(terrainSt, e2.v4, neighbor, v5, nextNeighbor, e1.v4, cell);
             }
             else
             {
-                TriangulateCorner(st, v5, nextNeighbor, e1.v4, cell, e2.v4, neighbor);
+                TriangulateCorner(terrainSt, v5, nextNeighbor, e1.v4, cell, e2.v4, neighbor);
             }
         }
     }
@@ -205,6 +241,114 @@ public static class HexMeshBuilder
         }
 
         TriangulateEdgeStrip(st, e2, c2, end, endCell.Color);
+    }
+
+    // ==================== River ====================
+
+    private static void TriangulateWithRiver(SurfaceTool terrainSt, SurfaceTool riverSt,
+        HexDirection direction, HexCell cell, Vector3 center, EdgeVertices e)
+    {
+        // 判断河流方向
+        bool incoming = cell.HasIncomingRiver && cell.IncomingRiver == direction;
+        bool outgoing = cell.HasOutgoingRiver && cell.OutgoingRiver == direction;
+        HexDirection otherDirection = incoming ? cell.OutgoingRiver : cell.IncomingRiver;
+        bool straight = otherDirection == direction.Opposite();
+
+        Vector3 centerL, centerR;
+        if (straight)
+        {
+            centerL = center + HexMetrics.GetFirstSolidCorner(direction.Previous()) * 0.25f;
+            centerR = center + HexMetrics.GetSecondSolidCorner(direction.Next()) * 0.25f;
+        }
+        else if (cell.HasRiverThroughEdge(direction.Next()))
+        {
+            centerL = center;
+            centerR = center + HexMetrics.GetSecondSolidCorner(direction.Next()) * 0.5f;
+        }
+        else if (cell.HasRiverThroughEdge(direction.Previous()))
+        {
+            centerL = center + HexMetrics.GetFirstSolidCorner(direction.Previous()) * 0.5f;
+            centerR = center;
+        }
+        else
+        {
+            centerL = centerR = center;
+        }
+        centerL.Y = centerR.Y = cell.StreamBedY;
+
+        EdgeVertices m = new EdgeVertices(
+            centerL.Lerp(e.v1, 0.5f),
+            centerR.Lerp(e.v4, 0.5f)
+        );
+        m.v3.Y = cell.StreamBedY;
+
+        // 地形三角化
+        if (straight)
+        {
+            AddTriangle(terrainSt, centerL, m.v1, m.v2, cell.Color, cell.Color, cell.Color);
+            AddTriangle(terrainSt, centerR, m.v3, m.v4, cell.Color, cell.Color, cell.Color);
+            AddQuad(terrainSt, m.v1, m.v2, e.v1, e.v2, cell.Color, cell.Color, cell.Color, cell.Color);
+            AddQuad(terrainSt, m.v3, m.v4, e.v3, e.v4, cell.Color, cell.Color, cell.Color, cell.Color);
+        }
+        else
+        {
+            // 非直穿简化处理
+            if (centerL != center)
+            {
+                AddTriangle(terrainSt, centerL, m.v1, m.v2, cell.Color, cell.Color, cell.Color);
+            }
+            if (centerR != center)
+            {
+                AddTriangle(terrainSt, centerR, m.v3, m.v4, cell.Color, cell.Color, cell.Color);
+            }
+            AddQuad(terrainSt, m.v1, m.v2, e.v1, e.v2, cell.Color, cell.Color, cell.Color, cell.Color);
+            AddQuad(terrainSt, m.v3, m.v4, e.v3, e.v4, cell.Color, cell.Color, cell.Color, cell.Color);
+        }
+
+        // 河流水面
+        TriangulateRiverQuad(riverSt, centerL, centerR, m.v2, m.v4, cell.RiverSurfaceY, false);
+        TriangulateRiverQuad(riverSt, m.v2, m.v4, e.v2, e.v4, cell.RiverSurfaceY, false);
+    }
+
+    private static void TriangulateRiverQuad(SurfaceTool st,
+        Vector3 v1, Vector3 v2, Vector3 v3, Vector3 v4,
+        float y1, float y2, bool reversed)
+    {
+        v1.Y = v2.Y = y1;
+        v3.Y = v4.Y = y2;
+
+        Vector2 uv1, uv2, uv3, uv4;
+        if (reversed)
+        {
+            uv1 = new Vector2(1f, 1f);
+            uv2 = new Vector2(0f, 1f);
+            uv3 = new Vector2(1f, 0f);
+            uv4 = new Vector2(0f, 0f);
+        }
+        else
+        {
+            uv1 = new Vector2(0f, 0f);
+            uv2 = new Vector2(1f, 0f);
+            uv3 = new Vector2(0f, 1f);
+            uv4 = new Vector2(1f, 1f);
+        }
+
+        // Triangle 1: v1, v2, v4
+        st.SetUV(uv1); st.AddVertex(v1);
+        st.SetUV(uv2); st.AddVertex(v2);
+        st.SetUV(uv4); st.AddVertex(v4);
+
+        // Triangle 2: v2, v3, v4
+        st.SetUV(uv2); st.AddVertex(v2);
+        st.SetUV(uv3); st.AddVertex(v3);
+        st.SetUV(uv4); st.AddVertex(v4);
+    }
+
+    private static void TriangulateRiverQuad(SurfaceTool st,
+        Vector3 v1, Vector3 v2, Vector3 v3, Vector3 v4,
+        float y, bool reversed)
+    {
+        TriangulateRiverQuad(st, v1, v2, v3, v4, y, y, reversed);
     }
 
     // ==================== Corner ====================

@@ -59,6 +59,23 @@ public readonly struct HexCoordinates : System.IEquatable<HexCoordinates>
         return (Mathf.Abs(X - other.X) + Mathf.Abs(Y - other.Y) + Mathf.Abs(Z - other.Z)) / 2;
     }
 
+    /// <summary>Part 6：返回从当前坐标指向邻居坐标的方向。假设两者相邻。</summary>
+    public HexDirection GetNeighborDirection(HexCoordinates other)
+    {
+        int dx = other.X - X;
+        int dz = other.Z - Z;
+        return (dx, dz) switch
+        {
+            (1, 0) => HexDirection.E,
+            (1, -1) => HexDirection.NE,
+            (0, -1) => HexDirection.NW,
+            (-1, 0) => HexDirection.W,
+            (-1, 1) => HexDirection.SW,
+            (0, 1) => HexDirection.SE,
+            _ => HexDirection.NE // fallback
+        };
+    }
+
     public override string ToString() => $"({X}, {Y}, {Z})";
     public string ToStringOnSeparateLines() => $"{X}\n{Y}\n{Z}";
 
