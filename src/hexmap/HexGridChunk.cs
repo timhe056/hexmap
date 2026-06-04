@@ -28,8 +28,11 @@ public partial class HexGridChunk : Node3D
         // 创建 Label3D 显示坐标
         var label = new Label3D();
         label.Text = cell.Coordinates.ToStringOnSeparateLines();
-        label.FontSize = 256;
-        label.Modulate = Colors.Black;
+        label.FontSize = 64;
+        label.PixelSize = 0.08f;
+        label.Modulate = Colors.White;
+        label.OutlineSize = 8;
+        label.OutlineModulate = Colors.Black;
         label.Billboard = BaseMaterial3D.BillboardModeEnum.Enabled;
         label.Position = cell.BasePosition + new Vector3(0f, HexMetrics.ElevationStep * 0.5f, 0f);
         label.Name = $"Label_{index}";
