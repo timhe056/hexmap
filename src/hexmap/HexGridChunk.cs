@@ -91,7 +91,7 @@ public partial class HexGridChunk : Node3D
 
         // Debug: 打印河流 mesh 顶点数
         int riverVertexCount = 0;
-        if (riverMesh != null)
+        if (riverMesh != null && riverMesh.GetSurfaceCount() > 0)
         {
             var arrays = riverMesh.SurfaceGetArrays(0);
             if (arrays.Count > 0 && arrays[0].AsGodotArray().Count > 0)
