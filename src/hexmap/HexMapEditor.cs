@@ -36,6 +36,7 @@ public partial class HexMapEditor : CanvasLayer
     private HSlider _elevationSlider;
     private HSlider _brushSlider;
     private CheckBox _showLabelsCheck;
+    private CheckBox _brushModeCheck;
 
     public override void _Ready()
     {
@@ -129,6 +130,13 @@ public partial class HexMapEditor : CanvasLayer
         _brushSlider.ValueChanged += v => brushValueLabel.Text = ((int)v).ToString();
         brushRow.AddChild(brushValueLabel);
 
+        // 笔刷模式开关
+        _brushModeCheck = new CheckBox();
+        _brushModeCheck.Text = "Brush Mode (Tab)";
+        _brushModeCheck.ButtonPressed = false;
+        _brushModeCheck.Toggled += OnBrushModeToggled;
+        vbox.AddChild(_brushModeCheck);
+
         // Label 显示开关
         _showLabelsCheck = new CheckBox();
         _showLabelsCheck.Text = "Show Labels";
@@ -176,6 +184,14 @@ public partial class HexMapEditor : CanvasLayer
         if (Grid != null)
         {
             Grid.ShowLabels(toggled);
+        }
+    }
+
+    private void OnBrushModeToggled(bool toggled)
+    {
+        if (Grid != null)
+        {
+            Grid.BrushModeEnabled = toggled;
         }
     }
 }

@@ -80,6 +80,9 @@ public partial class HexGrid : Node3D
     /// <summary>当前颜色索引，-1 表示不涂色</summary>
     public int ActiveColorIndex { get; set; } = -1;
 
+    /// <summary>笔刷模式开关：开启时鼠标移动显示笔刷范围预览</summary>
+    public bool BrushModeEnabled { get; set; } = false;
+
     /// <summary>地形颜色预设</summary>
     public static readonly Color[] TerrainColors = new[] {
         new Color(1f, 0.85f, 0.55f), // 沙色
@@ -95,6 +98,7 @@ public partial class HexGrid : Node3D
     private bool _isReady = false;
     private HexCell[] _cells;
     private HexGridChunk[] _chunks;
+    private MeshInstance3D _brushPreview;
 
     private int CellCountX => _chunkCountX * HexMetrics.ChunkSizeX;
     private int CellCountZ => _chunkCountZ * HexMetrics.ChunkSizeZ;
@@ -104,8 +108,28 @@ public partial class HexGrid : Node3D
     public override void _Ready()
     {
         HexMetrics.InitializeNoise();
+        EnsureBrushPreview();
         _isReady = true;
         Regenerate();
+    }
+
+    private void EnsureBrushPreview()
+    {
+        _brushPreview = GetNodeOrNull<MeshInstance3D>("BrushPreview");
+        if (_brushPreview == null)
+        {
+            _brushPreview = new MeshInstance3D();
+            _brushPreview.Name = "BrushPreview";
+            _brushPreview.Visible = false;
+            AddChild(_brushPreview);
+        }
+        var mat = new StandardMaterial3D
+        {
+            Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
+            CullMode = BaseMaterial3D.CullModeEnum.Disabled,
+            AlbedoColor = new Color(0.3f, 1f, 0.3f, 0.35f)
+        };
+        _brushPreview.MaterialOverride = mat;
     }
 
     // ==================== 网格生成 ====================
@@ -296,6 +320,19 @@ public partial class HexGrid : Node3D
     {
         if (Engine.IsEditorHint()) return;
 
+        if (@event is InputEventKey keyEvent && keyEvent.Pressed && !keyEvent.Echo)
+        {
+            if (keyEvent.Keycode == Key.Tab)
+            {
+                BrushModeEnabled = !BrushModeEnabled;
+                if (!BrushModeEnabled && _brushPreview != null)
+                {
+                    _brushPreview.Visible = false;
+                }
+                GD.Print($"[HexGrid] BrushModeEnabled = {BrushModeEnabled}");
+            }
+        }
+
         if (@event is InputEventMouseButton mouseButton)
         {
             if (mouseButton.ButtonIndex == MouseButton.Left)
@@ -346,8 +383,12 @@ public partial class HexGrid : Node3D
         }
     }
 
-    private void EditCells(HexCell center)
+    /// <summary>获取笔刷范围内的所有 Cell（包含 null）</summary>
+    public System.Collections.Generic.List<HexCell> GetBrushCells(HexCell center)
     {
+        var result = new System.Collections.Generic.List<HexCell>();
+        if (center == null) return result;
+
         int centerX = center.Coordinates.X;
         int centerZ = center.Coordinates.Z;
 
@@ -355,15 +396,24 @@ public partial class HexGrid : Node3D
         {
             for (int x = centerX - r; x <= centerX + _brushSize; x++)
             {
-                EditCell(GetCell(new HexCoordinates(x, z)));
+                result.Add(GetCell(new HexCoordinates(x, z)));
             }
         }
         for (int r = 0, z = centerZ + _brushSize; z > centerZ; z--, r++)
         {
             for (int x = centerX - _brushSize; x <= centerX + r; x++)
             {
-                EditCell(GetCell(new HexCoordinates(x, z)));
+                result.Add(GetCell(new HexCoordinates(x, z)));
             }
+        }
+        return result;
+    }
+
+    private void EditCells(HexCell center)
+    {
+        foreach (var cell in GetBrushCells(center))
+        {
+            EditCell(cell);
         }
     }
 
@@ -388,6 +438,60 @@ public partial class HexGrid : Node3D
         {
             chunk.ShowLabels(visible);
         }
+    }
+
+    // ==================== 笔刷预览 ====================
+
+    public override void _Process(double delta)
+    {
+        if (Engine.IsEditorHint()) return;
+        if (!BrushModeEnabled || _brushPreview == null)
+        {
+            if (_brushPreview != null) _brushPreview.Visible = false;
+            return;
+        }
+
+        var mousePos = GetViewport().GetMousePosition();
+        var cell = RaycastToCell(mousePos);
+        if (cell != null)
+        {
+            BuildBrushPreview(cell);
+            _brushPreview.Visible = true;
+        }
+        else
+        {
+            _brushPreview.Visible = false;
+        }
+    }
+
+    private void BuildBrushPreview(HexCell centerCell)
+    {
+        var cells = GetBrushCells(centerCell);
+        var st = new SurfaceTool();
+        st.Begin(Mesh.PrimitiveType.Triangles);
+
+        foreach (var cell in cells)
+        {
+            if (cell == null) continue;
+            Vector3 center = cell.Position;
+            center.Y += 0.15f;
+            Color c = new Color(0.3f, 1f, 0.3f, 0.4f);
+
+            for (HexDirection d = HexDirection.NE; d <= HexDirection.NW; d++)
+            {
+                Vector3 v1 = center + HexMetrics.GetFirstSolidCorner(d);
+                v1.Y = center.Y;
+                Vector3 v2 = center + HexMetrics.GetSecondSolidCorner(d);
+                v2.Y = center.Y;
+
+                st.SetColor(c); st.AddVertex(center);
+                st.SetColor(c); st.AddVertex(v2);
+                st.SetColor(c); st.AddVertex(v1);
+            }
+        }
+
+        st.GenerateNormals();
+        _brushPreview.Mesh = st.Commit();
     }
 
     private HexCell RaycastToCell(Vector2 screenPosition)
