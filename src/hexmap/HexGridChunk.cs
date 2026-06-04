@@ -11,14 +11,27 @@ public partial class HexGridChunk : Node3D
     private HexCell[] _cells;
     private MeshInstance3D _meshInstance;
     private MeshInstance3D _riverMeshInstance;
+    /* Part 7: 道路网格实例 */
+    private MeshInstance3D _roadMeshInstance;
     private bool _needsRefresh = false;
     private Label3D[] _labels;
+    /* Part 9: 地形特征管理器 */
+    private HexFeatureManager _featureManager;
 
     public override void _Ready()
     {
         EnsureMeshInstance();
         _cells = new HexCell[HexMetrics.ChunkSizeX * HexMetrics.ChunkSizeZ];
         _labels = new Label3D[_cells.Length];
+
+        /* Part 9: 创建特征管理器子节点 */
+        _featureManager = new HexFeatureManager();
+        _featureManager.Name = "Features";
+        AddChild(_featureManager);
+        if (Engine.IsEditorHint() && GetTree()?.EditedSceneRoot != null)
+        {
+            _featureManager.Owner = GetTree().EditedSceneRoot;
+        }
     }
 
     public void AddCell(int index, HexCell cell)
@@ -78,18 +91,27 @@ public partial class HexGridChunk : Node3D
     {
         if (_meshInstance == null) return;
 
-        HexMeshBuilder.BuildMeshes(_cells, out Mesh terrainMesh, out Mesh riverMesh);
+        /* Part 9: 清除旧特征 */
+        _featureManager?.Clear();
+
+        /* Part 7: 三输出 BuildMeshes */
+        HexMeshBuilder.BuildMeshes(_cells, out Mesh terrainMesh, out Mesh riverMesh, out Mesh roadMesh);
         _meshInstance.Mesh = terrainMesh;
         _riverMeshInstance.Mesh = riverMesh;
+        _roadMeshInstance.Mesh = roadMesh;
 
-        var mat = new StandardMaterial3D
+        if (_meshInstance.MaterialOverride == null)
+            _meshInstance.MaterialOverride = LoadTerrainMaterial();
+
+        if (_riverMeshInstance.MaterialOverride == null) _riverMeshInstance.MaterialOverride = LoadRiverMaterial();
+        if (_roadMeshInstance.MaterialOverride == null) _roadMeshInstance.MaterialOverride = LoadRoadMaterial();
+
+        /* Part 9: 为每个单元格放置特征 */
+        foreach (var cell in _cells)
         {
-            VertexColorUseAsAlbedo = true,
-            CullMode = BaseMaterial3D.CullModeEnum.Disabled
-        };
-        _meshInstance.MaterialOverride = mat;
-
-        _riverMeshInstance.MaterialOverride = CreateRiverMaterial();
+            if (cell != null) TriangulateCellFeatures(cell);
+        }
+        _featureManager?.Apply();
 
         // Debug: 打印河流 mesh 顶点数
         int riverVertexCount = 0;
@@ -106,6 +128,26 @@ public partial class HexGridChunk : Node3D
         if (riverCellCount > 0)
         {
             GD.Print($"[HexGridChunk] Triangulate: {Name}, riverCells={riverCellCount}, riverVertices={riverVertexCount}");
+        }
+    }
+
+    /* Part 9: 为单个单元格放置特征 */
+    private void TriangulateCellFeatures(HexCell cell)
+    {
+        /* 中心特征：仅当无河流且非水下时放置 */
+        if (!cell.IsUnderwater && !cell.HasRiver)
+        {
+            _featureManager.AddFeature(cell.Position, cell);
+        }
+
+        /* 各方向特征 */
+        for (HexDirection d = HexDirection.NE; d <= HexDirection.NW; d++)
+        {
+            if (!cell.IsUnderwater && (!cell.HasRiver || !cell.HasRiverThroughEdge(d)) && !cell.HasRoadThroughEdge(d))
+            {
+                Vector3 edgePos = cell.Position * 2f + HexMetrics.GetSolidEdgeMiddle(d);
+                _featureManager.AddFeature(edgePos, cell);
+            }
         }
     }
 
@@ -128,52 +170,42 @@ public partial class HexGridChunk : Node3D
         {
             _riverMeshInstance = new MeshInstance3D();
             _riverMeshInstance.Name = "Rivers";
-            _riverMeshInstance.MaterialOverride = CreateRiverMaterial();
+            if (_riverMeshInstance.MaterialOverride == null) _riverMeshInstance.MaterialOverride = LoadRiverMaterial();
             AddChild(_riverMeshInstance);
             if (Engine.IsEditorHint() && GetTree()?.EditedSceneRoot != null)
             {
                 _riverMeshInstance.Owner = GetTree().EditedSceneRoot;
             }
         }
+
+        /* Part 7: 创建道路网格实例 */
+        _roadMeshInstance = GetNodeOrNull<MeshInstance3D>("Roads");
+        if (_roadMeshInstance == null)
+        {
+            _roadMeshInstance = new MeshInstance3D();
+            _roadMeshInstance.Name = "Roads";
+            if (_roadMeshInstance.MaterialOverride == null) _roadMeshInstance.MaterialOverride = LoadRoadMaterial();
+            AddChild(_roadMeshInstance);
+            if (Engine.IsEditorHint() && GetTree()?.EditedSceneRoot != null)
+            {
+                _roadMeshInstance.Owner = GetTree().EditedSceneRoot;
+            }
+        }
     }
 
-    private static ShaderMaterial CreateRiverMaterial()
+    private static ShaderMaterial LoadRiverMaterial()
     {
-        var shader = new Shader();
-        shader.Code = @"
-shader_type spatial;
-render_mode blend_mix, cull_disabled, unshaded, depth_test_disabled;
+        return ResourceLoader.Load<ShaderMaterial>("res://assets/materials/river.tres");
+    }
 
-uniform vec4 color : source_color = vec4(0.15, 0.4, 0.8, 0.7);
-uniform float speed : hint_range(0.0, 2.0) = 0.25;
-uniform sampler2D noise_texture : repeat_enable;
+    /* Part 7: 创建道路材质（基于 UV.x 透明度混合 + 噪声扰动产生粗糙边缘） */
+    private static ShaderMaterial LoadRoadMaterial()
+    {
+        return ResourceLoader.Load<ShaderMaterial>("res://assets/materials/road.tres");
+    }
 
-void fragment() {
-    vec2 uv = UV;
-    uv.x *= 0.0625;
-    uv.y -= TIME * speed;
-    float n = texture(noise_texture, uv).r;
-    vec3 c = clamp(color.rgb + n * 0.3, 0.0, 1.0);
-    ALBEDO = c;
-    ALPHA = clamp(color.a + n * 0.2, 0.0, 1.0);
-}
-";
-        var mat = new ShaderMaterial();
-        mat.Shader = shader;
-        mat.SetShaderParameter("color", new Color(0.15f, 0.4f, 0.8f, 0.7f));
-        mat.SetShaderParameter("speed", 0.25f);
-        // 创建噪声纹理
-        var noise = new FastNoiseLite();
-        noise.NoiseType = FastNoiseLite.NoiseTypeEnum.Perlin;
-        noise.Seed = 12345;
-        noise.Frequency = 1.0f;
-        var noiseTex = new NoiseTexture2D();
-        noiseTex.Noise = noise;
-        noiseTex.Width = 256;
-        noiseTex.Height = 256;
-        noiseTex.Normalize = true;
-        noiseTex.Seamless = true;
-        mat.SetShaderParameter("noise_texture", noiseTex);
-        return mat;
+    private static Material LoadTerrainMaterial()
+    {
+        return ResourceLoader.Load<ShaderMaterial>("res://assets/materials/terrain.tres");
     }
 }

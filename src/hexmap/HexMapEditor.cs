@@ -29,6 +29,14 @@ public partial class HexMapEditor : CanvasLayer
 
     public int ActiveColorIndex { get; private set; } = -1;
 
+    /* Part 9: 地形特征级别 */
+    [Export(PropertyHint.Range, "0,3,1")]
+    public int ActiveUrbanLevel { get; set; } = 0;
+    [Export(PropertyHint.Range, "0,3,1")]
+    public int ActiveFarmLevel { get; set; } = 0;
+    [Export(PropertyHint.Range, "0,3,1")]
+    public int ActivePlantLevel { get; set; } = 0;
+
     // UI 引用
     private Panel _panel;
     private HBoxContainer _colorRow;
@@ -40,6 +48,14 @@ public partial class HexMapEditor : CanvasLayer
     private Button _riverIgnoreBtn;
     private Button _riverAddBtn;
     private Button _riverRemoveBtn;
+
+    /* Part 9: 特征级别 UI 控件 */
+    private HSlider _urbanSlider;
+    private Label _urbanValueLabel;
+    private HSlider _farmSlider;
+    private Label _farmValueLabel;
+    private HSlider _plantSlider;
+    private Label _plantValueLabel;
 
     public override void _Ready()
     {
@@ -55,7 +71,7 @@ public partial class HexMapEditor : CanvasLayer
         _panel.OffsetLeft = -220;
         _panel.OffsetTop = 10;
         _panel.OffsetRight = -10;
-        _panel.OffsetBottom = 340;
+        _panel.OffsetBottom = 480;
         _panel.MouseFilter = Control.MouseFilterEnum.Stop; // 背景不拦截鼠标事件
         AddChild(_panel);
 
@@ -155,6 +171,23 @@ public partial class HexMapEditor : CanvasLayer
         _riverRemoveBtn = CreateRiverModeButton("Remove", OptionalToggle.No, false);
         riverRow.AddChild(_riverRemoveBtn);
 
+        /* Part 9: 地形特征级别滑条 */
+        _urbanSlider = AddLevelSlider(vbox, "Urban", 0, out _urbanValueLabel, v =>
+        {
+            ActiveUrbanLevel = (int)v;
+            if (Grid != null) Grid.ActiveUrbanLevel = ActiveUrbanLevel;
+        });
+        _farmSlider = AddLevelSlider(vbox, "Farm", 0, out _farmValueLabel, v =>
+        {
+            ActiveFarmLevel = (int)v;
+            if (Grid != null) Grid.ActiveFarmLevel = ActiveFarmLevel;
+        });
+        _plantSlider = AddLevelSlider(vbox, "Plant", 0, out _plantValueLabel, v =>
+        {
+            ActivePlantLevel = (int)v;
+            if (Grid != null) Grid.ActivePlantLevel = ActivePlantLevel;
+        });
+
         // Label 显示开关
         _showLabelsCheck = new CheckBox();
         _showLabelsCheck.Text = "Show Labels";
@@ -239,6 +272,33 @@ public partial class HexMapEditor : CanvasLayer
         {
             Grid.BrushModeEnabled = toggled;
         }
+    }
+
+    /* Part 9: 创建特征级别滑块行，返回 HSlider，通过 out 输出 Label */
+    private HSlider AddLevelSlider(VBoxContainer parent, string label, int initialValue,
+        out Label valueLabel, Range.ValueChangedEventHandler onChanged)
+    {
+        var row = new HBoxContainer();
+        parent.AddChild(row);
+
+        row.AddChild(new Label { Text = label });
+
+        var slider = new HSlider();
+        slider.MinValue = 0;
+        slider.MaxValue = 3;
+        slider.Step = 1;
+        slider.Value = initialValue;
+        slider.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        slider.ValueChanged += onChanged;
+        row.AddChild(slider);
+
+        valueLabel = new Label();
+        valueLabel.Text = initialValue.ToString();
+        var capturedLabel = valueLabel;
+        slider.ValueChanged += v => capturedLabel.Text = ((int)v).ToString();
+        row.AddChild(valueLabel);
+
+        return slider;
     }
 
     private Button CreateRiverModeButton(string text, OptionalToggle mode, bool pressed)

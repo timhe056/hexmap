@@ -39,7 +39,7 @@ public static class HexMetrics
     public const float VerticalTerraceStepSize = 1f / (TerracesPerSlope + 1);
 
     /// <summary>顶点位置扰动强度（Part 4 降至 4）</summary>
-    public const float CellPerturbStrength = 0f; // 4f;
+    public const float CellPerturbStrength = 4f;
     /// <summary>高程扰动强度（Part 4）</summary>
     public const float ElevationPerturbStrength = 1.5f;
     /// <summary>Perlin 噪声采样缩放，越小噪声频率越低（地形越平缓）</summary>
@@ -125,6 +125,68 @@ public static class HexMetrics
         float b = _noise.GetNoise2D(x, z + 1000f) * 0.5f + 0.5f;
         float a = _noise.GetNoise2D(x + 1000f, z + 1000f) * 0.5f + 0.5f;
         return new Vector4(r, g, b, a);
+    }
+
+    // ==================== Part 9: 哈希网格（确定性随机） ====================
+
+    /// <summary>哈希网格分辨率</summary>
+    public const int HashGridSize = 256;
+    /// <summary>哈希网格缩放：每 4x4 单位共用同一网格值</summary>
+    public const float HashGridScale = 4f;
+
+    private static HexHash[] _hashGrid;
+
+    /// <summary>Part 9: 初始化哈希网格</summary>
+    public static void InitializeHashGrid(int seed)
+    {
+        if (_hashGrid != null) return;
+
+        _hashGrid = new HexHash[HashGridSize * HashGridSize];
+        System.Random rng = new System.Random(seed);
+        for (int i = 0; i < _hashGrid.Length; i++)
+        {
+            _hashGrid[i] = HexHash.Random(rng);
+        }
+    }
+
+    /// <summary>Part 9: 采样位置对应的确定性哈希值</summary>
+    public static HexHash SampleHash(Vector3 position)
+    {
+        int x = Mathf.FloorToInt(position.X / HashGridScale);
+        int z = Mathf.FloorToInt(position.Z / HashGridScale);
+        x %= HashGridSize;
+        if (x < 0) x += HashGridSize;
+        z %= HashGridSize;
+        if (z < 0) z += HashGridSize;
+        return _hashGrid[x + z * HashGridSize];
+    }
+
+    /// <summary>Part 9: 公开的顶点扰动方法（与 HexMeshBuilder 内私有方法逻辑相同）</summary>
+    public static Vector3 Perturb(Vector3 position)
+    {
+        Vector4 sample = SampleNoise(position);
+        position.X += (sample.X * 2f - 1f) * CellPerturbStrength;
+        position.Z += (sample.Z * 2f - 1f) * CellPerturbStrength;
+        return position;
+    }
+
+    // ==================== Part 9: 特征阈值系统 ====================
+
+    /// <summary>
+    /// 三级特征阈值数组。
+    /// 每级对应三个 prefab 类型（高、中、低密度），值从小到大。
+    /// level1: 仅低密度有概率; level2: 中、低密度; level3: 所有三种
+    /// </summary>
+    private static readonly float[][] FeatureThresholds = {
+        new float[] { 0f, 0f, 0.4f },
+        new float[] { 0f, 0.4f, 0.6f },
+        new float[] { 0.4f, 0.6f, 0.8f }
+    };
+
+    /// <summary>Part 9: 获取指定等级的阈值数组</summary>
+    public static float[] GetFeatureThresholds(int level)
+    {
+        return FeatureThresholds[level];
     }
 }
 

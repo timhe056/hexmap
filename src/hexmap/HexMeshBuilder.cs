@@ -45,42 +45,49 @@ public static class HexMeshBuilder
 
     // ==================== 公共入口 ====================
 
-    public static void BuildMeshes(HexCell[] cells, out Mesh terrainMesh, out Mesh riverMesh)
+    /* Part 7: 新增 roadMesh 输出 */
+    public static void BuildMeshes(HexCell[] cells, out Mesh terrainMesh, out Mesh riverMesh, out Mesh roadMesh)
     {
         var terrainSt = new SurfaceTool();
         var riverSt = new SurfaceTool();
+        var roadSt = new SurfaceTool();
         terrainSt.Begin(Mesh.PrimitiveType.Triangles);
         riverSt.Begin(Mesh.PrimitiveType.Triangles);
+        roadSt.Begin(Mesh.PrimitiveType.Triangles);
 
         for (int i = 0; i < cells.Length; i++)
         {
             if (cells[i] != null)
-                TriangulateCell(cells[i], terrainSt, riverSt);
+                TriangulateCell(cells[i], terrainSt, riverSt, roadSt);
         }
 
         terrainSt.GenerateNormals();
         riverSt.GenerateNormals();
+        roadSt.GenerateNormals();
         terrainMesh = terrainSt.Commit();
         riverMesh = riverSt.Commit();
+        roadMesh = roadSt.Commit();
     }
 
     public static Mesh BuildMesh(HexCell[] cells)
     {
-        BuildMeshes(cells, out Mesh terrainMesh, out _);
+        BuildMeshes(cells, out Mesh terrainMesh, out _, out _);
         return terrainMesh;
     }
 
     // ==================== Cell / Sector ====================
 
-    private static void TriangulateCell(HexCell cell, SurfaceTool terrainSt, SurfaceTool riverSt)
+    /* Part 7: 新增 roadSt 参数 */
+    private static void TriangulateCell(HexCell cell, SurfaceTool terrainSt, SurfaceTool riverSt, SurfaceTool roadSt)
     {
         for (HexDirection d = HexDirection.NE; d <= HexDirection.NW; d++)
         {
-            Triangulate(terrainSt, riverSt, d, cell);
+            Triangulate(terrainSt, riverSt, roadSt, d, cell);
         }
     }
 
-    private static void Triangulate(SurfaceTool terrainSt, SurfaceTool riverSt, HexDirection direction, HexCell cell)
+    /* Part 7: 新增 roadSt 参数，无河流时调用 TriangulateWithoutRiver */
+    private static void Triangulate(SurfaceTool terrainSt, SurfaceTool riverSt, SurfaceTool roadSt, HexDirection direction, HexCell cell)
     {
         Vector3 center = cell.Position;
         EdgeVertices e = new EdgeVertices(
@@ -104,17 +111,20 @@ public static class HexMeshBuilder
             }
             else
             {
-                TriangulateAdjacentToRiver(terrainSt, riverSt, direction, cell, center, e);
+                /* Part 7: 透传 roadSt */
+                TriangulateAdjacentToRiver(terrainSt, riverSt, roadSt, direction, cell, center, e);
             }
         }
         else
         {
-            TriangulateEdgeFan(terrainSt, center, e, cell.Color);
+            /* Part 7: 使用道路感知的三角化方法 */
+            TriangulateWithoutRiver(terrainSt, roadSt, direction, cell, center, e);
         }
 
         if (direction <= HexDirection.SE)
         {
-            TriangulateConnection(terrainSt, riverSt, direction, cell, e);
+            /* Part 7: 透传 roadSt */
+            TriangulateConnection(terrainSt, riverSt, roadSt, direction, cell, e);
         }
     }
 
@@ -164,6 +174,24 @@ public static class HexMeshBuilder
         st.SetColor(c4); st.AddVertex(v4);
     }
 
+    /* Part 7: 道路网格使用 UV 而非顶点颜色 */
+    private static void AddRoadQuad(SurfaceTool st, Vector3 v1, Vector3 v2, Vector3 v3, Vector3 v4, float uMin, float uMax)
+    {
+        st.SetUV(new Vector2(uMin, 0f)); st.AddVertex(Perturb(v1));
+        st.SetUV(new Vector2(uMax, 0f)); st.AddVertex(Perturb(v4));
+        st.SetUV(new Vector2(uMax, 0f)); st.AddVertex(Perturb(v2));
+        st.SetUV(new Vector2(uMin, 0f)); st.AddVertex(Perturb(v1));
+        st.SetUV(new Vector2(uMin, 0f)); st.AddVertex(Perturb(v3));
+        st.SetUV(new Vector2(uMax, 0f)); st.AddVertex(Perturb(v4));
+    }
+
+    private static void AddRoadTriangle(SurfaceTool st, Vector3 v1, Vector3 v2, Vector3 v3, Vector2 uv1, Vector2 uv2, Vector2 uv3)
+    {
+        st.SetUV(uv1); st.AddVertex(Perturb(v1));
+        st.SetUV(uv3); st.AddVertex(Perturb(v3));
+        st.SetUV(uv2); st.AddVertex(Perturb(v2));
+    }
+
     // ==================== Edge ====================
 
     private static void TriangulateEdgeFan(SurfaceTool st, Vector3 center, EdgeVertices edge, Color color)
@@ -174,7 +202,8 @@ public static class HexMeshBuilder
         AddTriangle(st, center, edge.v4, edge.v5, color, color, color);
     }
 
-    private static void TriangulateEdgeStrip(SurfaceTool st, EdgeVertices e1, Color c1, EdgeVertices e2, Color c2)
+    /* Part 7: 新增 hasRoad 参数，有道路时在中间 quad 段画路面 */
+    private static void TriangulateEdgeStrip(SurfaceTool st, EdgeVertices e1, Color c1, EdgeVertices e2, Color c2, bool hasRoad = false)
     {
         AddQuad(st, e1.v1, e1.v2, e2.v1, e2.v2, c1, c1, c2, c2);
         AddQuad(st, e1.v2, e1.v3, e2.v2, e2.v3, c1, c1, c2, c2);
@@ -182,7 +211,8 @@ public static class HexMeshBuilder
         AddQuad(st, e1.v4, e1.v5, e2.v4, e2.v5, c1, c1, c2, c2);
     }
 
-    private static void TriangulateConnection(SurfaceTool terrainSt, SurfaceTool riverSt, HexDirection direction, HexCell cell, EdgeVertices e1)
+    /* Part 7: 新增 roadSt 参数，在连接处传入道路信息 */
+    private static void TriangulateConnection(SurfaceTool terrainSt, SurfaceTool riverSt, SurfaceTool roadSt, HexDirection direction, HexCell cell, EdgeVertices e1)
     {
         HexCell neighbor = cell.GetNeighbor(direction);
         if (neighbor == null) return;
@@ -205,6 +235,9 @@ public static class HexMeshBuilder
             );
         }
 
+        /* Part 7: 获取道路信息 */
+        bool hasRoad = cell.HasRoadThroughEdge(direction);
+
         if (cell.GetEdgeType(direction) == HexEdgeType.Slope)
         {
             TriangulateEdgeTerraces(terrainSt, e1, cell, e2, neighbor);
@@ -212,6 +245,12 @@ public static class HexMeshBuilder
         else
         {
             TriangulateEdgeStrip(terrainSt, e1, cell.Color, e2, neighbor.Color);
+        }
+
+        /* Part 7: 道路单独画到 roadSt 网格 */
+        if (hasRoad)
+        {
+            TriangulateRoadSegment(roadSt, e1.v2, e1.v3, e1.v4, e2.v2, e2.v3, e2.v4);
         }
 
         HexCell nextNeighbor = cell.GetNeighbor(direction.Next());
@@ -242,6 +281,7 @@ public static class HexMeshBuilder
         }
     }
 
+    /* Part 7: 新增 hasRoad 参数，透传到 TriangulateEdgeStrip */
     private static void TriangulateEdgeTerraces(SurfaceTool st,
         EdgeVertices begin, HexCell beginCell,
         EdgeVertices end, HexCell endCell)
@@ -261,6 +301,152 @@ public static class HexMeshBuilder
         }
 
         TriangulateEdgeStrip(st, e2, c2, end, endCell.Color);
+    }
+
+    /* Part 7: 有道路时在河流相邻侧画道路 */
+    private static void TriangulateRoadAdjacentToRiver(SurfaceTool terrainSt, SurfaceTool roadSt, HexDirection direction, HexCell cell, Vector3 center, EdgeVertices e)
+    {
+        bool hasRoadThroughEdge = cell.HasRoadThroughEdge(direction);
+        bool previousHasRiver = cell.HasRiverThroughEdge(direction.Previous());
+        bool nextHasRiver = cell.HasRiverThroughEdge(direction.Next());
+
+        Vector2 interpolators = GetRoadInterpolators(direction, cell);
+        Vector3 roadCenter = center;
+
+        if (cell.HasRiverBeginOrEnd)
+        {
+            roadCenter += HexMetrics.GetSolidEdgeMiddle(
+                cell.RiverBeginOrEndDirection.Opposite()
+            ) * (1f / 3f);
+        }
+        else if (cell.HasRiverThroughEdge(direction.Previous()))
+        {
+            if (!hasRoadThroughEdge && !nextHasRiver)
+            {
+                return;
+            }
+            Vector3 middle = HexMetrics.GetSecondSolidCorner(direction);
+            roadCenter += middle * 0.25f;
+        }
+        else if (cell.HasRiverThroughEdge(direction.Next()))
+        {
+            if (!hasRoadThroughEdge && !previousHasRiver)
+            {
+                return;
+            }
+            Vector3 middle = HexMetrics.GetFirstSolidCorner(direction);
+            roadCenter += middle * 0.25f;
+        }
+        else if (cell.HasRiverThroughEdge(direction.Previous2()))
+        {
+            if (!hasRoadThroughEdge && !nextHasRiver)
+            {
+                return;
+            }
+            Vector3 middle = HexMetrics.GetFirstSolidCorner(direction);
+            roadCenter += middle * 0.25f;
+        }
+        else if (cell.HasRiverThroughEdge(direction.Next2()))
+        {
+            if (!hasRoadThroughEdge && !previousHasRiver)
+            {
+                return;
+            }
+            Vector3 middle = HexMetrics.GetSecondSolidCorner(direction);
+            roadCenter += middle * 0.25f;
+        }
+        else
+        {
+            return;
+        }
+
+        Vector3 mL = roadCenter.Lerp(e.v1, interpolators.X);
+        Vector3 mR = roadCenter.Lerp(e.v5, interpolators.Y);
+
+        TriangulateRoad(roadSt, roadCenter, mL, mR, e, hasRoadThroughEdge);
+
+        if (previousHasRiver && !hasRoadThroughEdge &&
+            !cell.HasRiverThroughEdge(direction.Previous2()))
+        {
+            Vector3 middle = HexMetrics.GetFirstSolidCorner(direction);
+            Vector3 middle2 = HexMetrics.GetSecondSolidCorner(direction);
+            TriangulateRoadEdge(roadSt, roadCenter, mL, middle);
+            TriangulateRoadEdge(roadSt, roadCenter, middle2, mR);
+        }
+        else if (nextHasRiver && !hasRoadThroughEdge &&
+                 !cell.HasRiverThroughEdge(direction.Next2()))
+        {
+            Vector3 middle = HexMetrics.GetFirstSolidCorner(direction);
+            Vector3 middle2 = HexMetrics.GetSecondSolidCorner(direction);
+            TriangulateRoadEdge(roadSt, roadCenter, middle, mR);
+            TriangulateRoadEdge(roadSt, roadCenter, mL, middle);
+        }
+    }
+
+    /* Part 7: 无河流时画道路（如果存在） */
+    private static void TriangulateWithoutRiver(SurfaceTool terrainSt, SurfaceTool roadSt, HexDirection direction, HexCell cell, Vector3 center, EdgeVertices e)
+    {
+        TriangulateEdgeFan(terrainSt, center, e, cell.Color);
+
+        if (cell.HasRoads)
+        {
+            Vector2 interpolators = GetRoadInterpolators(direction, cell);
+            TriangulateRoad(roadSt,
+                center,
+                center.Lerp(e.v1, interpolators.X),
+                center.Lerp(e.v5, interpolators.Y),
+                e,
+                cell.HasRoadThroughEdge(direction)
+            );
+        }
+    }
+
+    /* Part 7: 确定左右中点插值系数 */
+    private static Vector2 GetRoadInterpolators(HexDirection direction, HexCell cell)
+    {
+        Vector2 interpolators;
+        if (cell.HasRoadThroughEdge(direction))
+        {
+            interpolators.X = interpolators.Y = 0.5f;
+        }
+        else
+        {
+            interpolators.X = cell.HasRoadThroughEdge(direction.Previous()) ? 0.5f : 0.25f;
+            interpolators.Y = cell.HasRoadThroughEdge(direction.Next()) ? 0.5f : 0.25f;
+        }
+        return interpolators;
+    }
+
+    /* Part 7: 从边缘到中心画路面或路沿 */
+    private static void TriangulateRoad(SurfaceTool roadSt, Vector3 center, Vector3 mL, Vector3 mR, EdgeVertices e, bool hasRoadThroughCellEdge)
+    {
+        if (hasRoadThroughCellEdge)
+        {
+            Vector3 mC = center.Lerp(mR, 0.5f);
+            TriangulateRoadSegment(roadSt, mL, mC, mR, e.v2, e.v3, e.v4);
+            AddRoadTriangle(roadSt, center, mL, mC,
+                new Vector2(1f, 0f), new Vector2(0f, 0f), new Vector2(1f, 0f));
+            AddRoadTriangle(roadSt, center, mC, mR,
+                new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(0f, 0f));
+        }
+        else
+        {
+            TriangulateRoadEdge(roadSt, center, mL, mR);
+        }
+    }
+
+    /* Part 7: 画两个连接的 quad 作为道路段 */
+    private static void TriangulateRoadSegment(SurfaceTool roadSt, Vector3 v1, Vector3 v2, Vector3 v3, Vector3 v4, Vector3 v5, Vector3 v6)
+    {
+        AddRoadQuad(roadSt, v1, v2, v4, v5, 0f, 1f);
+        AddRoadQuad(roadSt, v2, v3, v5, v6, 1f, 0f);
+    }
+
+    /* Part 7: 仅画路沿三角形 */
+    private static void TriangulateRoadEdge(SurfaceTool roadSt, Vector3 center, Vector3 mL, Vector3 mR)
+    {
+        AddRoadTriangle(roadSt, center, mL, mR,
+            new Vector2(1f, 0f), new Vector2(0f, 0f), new Vector2(0f, 0f));
     }
 
     // ==================== River ====================
@@ -353,7 +539,8 @@ public static class HexMeshBuilder
         }
     }
 
-    private static void TriangulateAdjacentToRiver(SurfaceTool terrainSt, SurfaceTool riverSt,
+    /* Part 7: 新增 roadSt 参数，有道路时调用 TriangulateRoadAdjacentToRiver */
+    private static void TriangulateAdjacentToRiver(SurfaceTool terrainSt, SurfaceTool riverSt, SurfaceTool roadSt,
         HexDirection direction, HexCell cell, Vector3 center, EdgeVertices e)
     {
         if (cell.HasRiverThroughEdge(direction.Next()))
@@ -383,6 +570,12 @@ public static class HexMeshBuilder
 
         TriangulateEdgeStrip(terrainSt, m, cell.Color, e, cell.Color);
         TriangulateEdgeFan(terrainSt, center, m, cell.Color);
+
+        /* Part 7: 有道路时在河流相邻侧画道路 */
+        if (cell.HasRoads)
+        {
+            TriangulateRoadAdjacentToRiver(terrainSt, roadSt, direction, cell, center, e);
+        }
     }
 
     private static void TriangulateRiverQuad(SurfaceTool st,

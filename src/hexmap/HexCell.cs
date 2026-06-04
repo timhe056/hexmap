@@ -46,6 +46,15 @@ public class HexCell
                 RemoveIncomingRiver();
             }
 
+            /* Part 7: 高程变化后移除坡度大于 1 的道路（变成悬崖） */
+            for (int i = 0; i < Roads.Length; i++)
+            {
+                if (Roads[i] && GetElevationDifference((HexDirection)i) > 1)
+                {
+                    SetRoad(i, false);
+                }
+            }
+
             Refresh();
         }
     }
@@ -66,6 +75,23 @@ public class HexCell
     public bool HasRiverThroughEdge(HexDirection direction)
         => (HasIncomingRiver && IncomingRiver == direction) ||
            (HasOutgoingRiver && OutgoingRiver == direction);
+
+    /* Part 7: 是否有至少一条道路 */
+    public bool HasRoads
+    {
+        get
+        {
+            for (int i = 0; i < Roads.Length; i++)
+            {
+                if (Roads[i]) return true;
+            }
+            return false;
+        }
+    }
+
+    /* Part 7: 河流起点或终点的方向（仅当 HasRiverBeginOrEnd 为 true 时有效） */
+    public HexDirection RiverBeginOrEndDirection
+        => HasIncomingRiver ? IncomingRiver : OutgoingRiver;
 
     public bool IsUnderwater => WaterLevel > Elevation;
     public float StreamBedY => (Elevation + HexMetrics.StreamBedElevationOffset) * HexMetrics.ElevationStep;
@@ -89,10 +115,13 @@ public class HexCell
         cell.Neighbors[(int)direction.Opposite()] = this;
     }
 
+    /* Part 7: 改为返回绝对差值，以便 AddRoad 中的 <= 1 检查正确判断上下坡 */
     public int GetElevationDifference(HexDirection direction)
     {
         HexCell neighbor = GetNeighbor(direction);
-        return neighbor == null ? int.MaxValue : Elevation - neighbor.Elevation;
+        if (neighbor == null) return int.MaxValue;
+        int diff = Elevation - neighbor.Elevation;
+        return diff >= 0 ? diff : -diff;
     }
 
     public HexEdgeType GetEdgeType(HexDirection direction)
@@ -159,39 +188,48 @@ public class HexCell
         neighbor.HasIncomingRiver = true;
         neighbor.IncomingRiver = direction.Opposite();
         neighbor.RefreshSelfOnly();
+
+        /* Part 7: 河流冲毁同方向的道路 */
+        SetRoad((int)direction, false);
+
         GD.Print($"[HexCell] River set: {Coordinates} -> {direction} -> {neighbor.Coordinates}");
     }
 
     public bool HasRoadThroughEdge(HexDirection direction) => Roads[(int)direction];
 
+    /* Part 7: 使用 SetRoad helper 统一设置道路，包含两侧刷新 */
     public void RemoveRoads()
     {
         for (int i = 0; i < Roads.Length; i++)
         {
             if (Roads[i])
             {
-                Roads[i] = false;
-                HexCell neighbor = Neighbors[i];
-                if (neighbor != null)
-                {
-                    neighbor.Roads[(int)((HexDirection)i).Opposite()] = false;
-                }
+                SetRoad(i, false);
             }
         }
     }
 
+    /* Part 7: 使用 SetRoad helper 统一设置道路 */
     public void AddRoad(HexDirection direction)
     {
         if (!Roads[(int)direction] && !HasRiverThroughEdge(direction)
             && GetElevationDifference(direction) <= 1)
         {
-            Roads[(int)direction] = true;
-            HexCell neighbor = Neighbors[(int)direction];
-            if (neighbor != null)
-            {
-                neighbor.Roads[(int)direction.Opposite()] = true;
-            }
+            SetRoad((int)direction, true);
         }
+    }
+
+    /* Part 7: 统一的路由设置入口，同时刷新自身和邻居 */
+    private void SetRoad(int index, bool state)
+    {
+        Roads[index] = state;
+        HexCell neighbor = Neighbors[index];
+        if (neighbor != null)
+        {
+            neighbor.Roads[(int)((HexDirection)index).Opposite()] = state;
+            neighbor.RefreshSelfOnly();
+        }
+        RefreshSelfOnly();
     }
 
     private bool IsValidRiverDestination(HexCell neighbor)
@@ -235,15 +273,36 @@ public class HexCell
     public HexHash Hash { get; set; }
 }
 
-/// <summary>用于确定性随机放置地形特征（Part 9）</summary>
+/// <summary>
+/// Part 9: 用于确定性随机放置地形特征的哈希值。
+/// A=城市阈值, B=农场阈值, C=植物阈值, D=变体选择, E=旋转
+/// </summary>
 public readonly struct HexHash
 {
     public readonly float A;
     public readonly float B;
+    public readonly float C;
+    public readonly float D;
+    public readonly float E;
 
-    public HexHash(float a, float b)
+    public HexHash(float a, float b, float c, float d, float e)
     {
         A = a;
         B = b;
+        C = c;
+        D = d;
+        E = e;
+    }
+
+    /// <summary>Part 9: 使用 System.Random 生成确定性 5 值哈希</summary>
+    public static HexHash Random(System.Random rng)
+    {
+        return new HexHash(
+            (float)rng.NextDouble() * 0.999f,
+            (float)rng.NextDouble() * 0.999f,
+            (float)rng.NextDouble() * 0.999f,
+            (float)rng.NextDouble() * 0.999f,
+            (float)rng.NextDouble() * 0.999f
+        );
     }
 }

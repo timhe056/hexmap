@@ -5,6 +5,21 @@ namespace HexMap;
 /// <summary>Part 6：三态开关（忽略 / 是 / 否）</summary>
 public enum OptionalToggle { Ignore, Yes, No }
 
+public static class OptionalToggleExtensions
+{
+    /// <summary>循环切换：Ignore → Yes → No → Ignore</summary>
+    public static OptionalToggle Next(this OptionalToggle toggle)
+    {
+        return toggle switch
+        {
+            OptionalToggle.Ignore => OptionalToggle.Yes,
+            OptionalToggle.Yes => OptionalToggle.No,
+            OptionalToggle.No => OptionalToggle.Ignore,
+            _ => OptionalToggle.Ignore,
+        };
+    }
+}
+
 /// <summary>
 /// Part 5：六边形网格管理器。
 /// 负责创建 Chunk、分配 Cell、响应 Inspector 参数变化。
@@ -63,6 +78,19 @@ public partial class HexGrid : Node3D
     }
     private int _defaultElevation = 0;
 
+    /* Part 9: 种子值，控制哈希网格确定性随机 */
+    [Export(PropertyHint.Range, "0,9999,1")]
+    public int Seed
+    {
+        get => _seed;
+        set
+        {
+            _seed = value;
+            if (_isReady) Regenerate();
+        }
+    }
+    private int _seed = 1234;
+
     [Export(PropertyHint.Range, "0,4,1")]
     public int BrushSize
     {
@@ -88,6 +116,14 @@ public partial class HexGrid : Node3D
 
     /// <summary>Part 6：河流编辑模式</summary>
     public OptionalToggle RiverMode { get; set; } = OptionalToggle.Ignore;
+
+    /* Part 7: 道路编辑模式 */
+    public OptionalToggle RoadMode { get; set; } = OptionalToggle.Ignore;
+
+    /* Part 9: 地形特征级别（UI 滑块控制） */
+    public int ActiveUrbanLevel { get; set; } = 0;
+    public int ActiveFarmLevel { get; set; } = 0;
+    public int ActivePlantLevel { get; set; } = 0;
 
     /// <summary>地形颜色预设（自然常用色）</summary>
     public static readonly Color[] TerrainColors = new[] {
@@ -116,6 +152,8 @@ public partial class HexGrid : Node3D
     public override void _Ready()
     {
         HexMetrics.InitializeNoise();
+        /* Part 9: 初始化哈希网格 */
+        HexMetrics.InitializeHashGrid(Seed);
         EnsureBrushPreview();
         _isReady = true;
         Regenerate();
@@ -344,6 +382,16 @@ public partial class HexGrid : Node3D
                 }
                 GD.Print($"[HexGrid] BrushModeEnabled = {BrushModeEnabled}");
             }
+            else if (keyEvent.Keycode == Key.R)
+            {
+                RiverMode = RiverMode.Next();
+                GD.Print($"[HexGrid] RiverMode = {RiverMode}");
+            }
+            else if (keyEvent.Keycode == Key.T)
+            {
+                RoadMode = RoadMode.Next();
+                GD.Print($"[HexGrid] RoadMode = {RoadMode}");
+            }
         }
 
         if (@event is InputEventMouseButton mouseButton)
@@ -392,10 +440,10 @@ public partial class HexGrid : Node3D
         }
         else if (@event is InputEventMouseMotion motion)
         {
-            // 拖拽过程中取消点击判定（河流编辑模式下不取消，因为需要支持长拖拽）
+            // 拖拽过程中取消点击判定（河流/道路编辑模式下不取消，因为需要支持长拖拽）
             if (_clickAnchor.HasValue && _clickAnchor.Value.DistanceTo(motion.Position) >= ClickDragThreshold)
             {
-                if (RiverMode == OptionalToggle.Ignore)
+                if (RiverMode == OptionalToggle.Ignore && RoadMode == OptionalToggle.Ignore)
                 {
                     _clickAnchor = null;
                 }
@@ -490,6 +538,27 @@ public partial class HexGrid : Node3D
                 otherCell.SetOutgoingRiver(_dragDirection);
             }
         }
+
+        /* Part 7: 道路编辑 */
+        if (RoadMode == OptionalToggle.No)
+        {
+            cell.RemoveRoads();
+            GD.Print($"[HexGrid] RemoveRoads at {cell.Coordinates}");
+        }
+        else if (_isDrag && RoadMode == OptionalToggle.Yes && !isRightClick)
+        {
+            HexCell otherCell = cell.GetNeighbor(_dragDirection.Opposite());
+            GD.Print($"[HexGrid] AddRoad: from={otherCell?.Coordinates}, dir={_dragDirection}, to={cell.Coordinates}");
+            if (otherCell != null)
+            {
+                otherCell.AddRoad(_dragDirection);
+            }
+        }
+
+        /* Part 9: 设置地形特征级别 */
+        cell.UrbanLevel = ActiveUrbanLevel;
+        cell.FarmLevel = ActiveFarmLevel;
+        cell.PlantLevel = ActivePlantLevel;
     }
 
     /// <summary>控制所有 Chunk 的 Cell Label 显示/隐藏</summary>
