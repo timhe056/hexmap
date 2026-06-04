@@ -68,6 +68,28 @@ public partial class HexGrid : Node3D
     }
     private int _brushSize = 0;
 
+    /// <summary>当前要高程设置的目标值（UI 滑块控制）</summary>
+    public int ActiveElevation { get; set; } = 0;
+
+    /// <summary>是否应用颜色编辑</summary>
+    public bool ApplyColor { get; set; } = false;
+
+    /// <summary>是否应用高程编辑</summary>
+    public bool ApplyElevation { get; set; } = true;
+
+    /// <summary>当前颜色索引，-1 表示不涂色</summary>
+    public int ActiveColorIndex { get; set; } = -1;
+
+    /// <summary>地形颜色预设</summary>
+    public static readonly Color[] TerrainColors = new[] {
+        new Color(1f, 0.85f, 0.55f), // 沙色
+        Colors.Yellow,
+        Colors.Green,
+        Colors.Blue,
+        Colors.Orange,
+        Colors.Red,
+    };
+
     // ==================== 内部状态 ====================
 
     private bool _isReady = false;
@@ -279,7 +301,7 @@ public partial class HexGrid : Node3D
                     if (_clickAnchor.Value.DistanceTo(mouseButton.Position) < ClickDragThreshold)
                     {
                         var cell = RaycastToCell(mouseButton.Position);
-                        if (cell != null) EditCells(cell, 1);
+                        if (cell != null) EditCells(cell);
                     }
                     _clickAnchor = null;
                 }
@@ -294,8 +316,13 @@ public partial class HexGrid : Node3D
                 {
                     if (_clickAnchor.Value.DistanceTo(mouseButton.Position) < ClickDragThreshold)
                     {
+                        // 右键擦除：恢复默认颜色和高程 0
                         var cell = RaycastToCell(mouseButton.Position);
-                        if (cell != null) EditCells(cell, -1);
+                        if (cell != null)
+                        {
+                            if (ApplyElevation) cell.Elevation = 0;
+                            if (ApplyColor) cell.Color = Colors.White;
+                        }
                     }
                     _clickAnchor = null;
                 }
@@ -311,7 +338,7 @@ public partial class HexGrid : Node3D
         }
     }
 
-    private void EditCells(HexCell center, int delta)
+    private void EditCells(HexCell center)
     {
         int centerX = center.Coordinates.X;
         int centerZ = center.Coordinates.Z;
@@ -320,23 +347,39 @@ public partial class HexGrid : Node3D
         {
             for (int x = centerX - r; x <= centerX + _brushSize; x++)
             {
-                EditCell(GetCell(new HexCoordinates(x, z)), delta);
+                EditCell(GetCell(new HexCoordinates(x, z)));
             }
         }
         for (int r = 0, z = centerZ + _brushSize; z > centerZ; z--, r++)
         {
             for (int x = centerX - _brushSize; x <= centerX + r; x++)
             {
-                EditCell(GetCell(new HexCoordinates(x, z)), delta);
+                EditCell(GetCell(new HexCoordinates(x, z)));
             }
         }
     }
 
-    private void EditCell(HexCell cell, int delta)
+    private void EditCell(HexCell cell)
     {
         if (cell == null) return;
-        cell.Elevation = Mathf.Max(0, cell.Elevation + delta);
-        GD.Print($"[HexGrid] Cell {cell.Coordinates} elevation = {cell.Elevation}");
+        if (ApplyElevation)
+        {
+            cell.Elevation = ActiveElevation;
+        }
+        if (ApplyColor && ActiveColorIndex >= 0)
+        {
+            cell.Color = TerrainColors[ActiveColorIndex];
+        }
+    }
+
+    /// <summary>控制所有 Chunk 的 Cell Label 显示/隐藏</summary>
+    public void ShowLabels(bool visible)
+    {
+        if (_chunks == null) return;
+        foreach (var chunk in _chunks)
+        {
+            chunk.ShowLabels(visible);
+        }
     }
 
     private HexCell RaycastToCell(Vector2 screenPosition)

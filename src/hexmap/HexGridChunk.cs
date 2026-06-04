@@ -11,17 +11,41 @@ public partial class HexGridChunk : Node3D
     private HexCell[] _cells;
     private MeshInstance3D _meshInstance;
     private bool _needsRefresh = false;
+    private Label3D[] _labels;
 
     public override void _Ready()
     {
         EnsureMeshInstance();
         _cells = new HexCell[HexMetrics.ChunkSizeX * HexMetrics.ChunkSizeZ];
+        _labels = new Label3D[_cells.Length];
     }
 
     public void AddCell(int index, HexCell cell)
     {
         _cells[index] = cell;
         cell.Chunk = this;
+
+        // 创建 Label3D 显示坐标
+        var label = new Label3D();
+        label.Text = cell.Coordinates.ToStringOnSeparateLines();
+        label.FontSize = 32;
+        label.Modulate = Colors.Black;
+        label.Billboard = BaseMaterial3D.BillboardModeEnum.Enabled;
+        label.Position = cell.BasePosition + new Vector3(0f, 2f, 0f);
+        label.Name = $"Label_{index}";
+        label.Visible = false;
+        AddChild(label);
+        _labels[index] = label;
+    }
+
+    /// <summary>控制本 Chunk 内所有 Label 的显示/隐藏</summary>
+    public void ShowLabels(bool visible)
+    {
+        if (_labels == null) return;
+        foreach (var label in _labels)
+        {
+            if (label != null) label.Visible = visible;
+        }
     }
 
     /// <summary>标记需要刷新。编辑器中立即三角化，运行时延迟到 _Process</summary>
