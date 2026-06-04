@@ -82,9 +82,6 @@ public partial class HexGridChunk : Node3D
         _meshInstance.Mesh = terrainMesh;
         _riverMeshInstance.Mesh = riverMesh;
 
-        // DEBUG: hide terrain to see river mesh in isolation
-        _meshInstance.Visible = false;
-
         var mat = new StandardMaterial3D
         {
             VertexColorUseAsAlbedo = true,
@@ -92,14 +89,7 @@ public partial class HexGridChunk : Node3D
         };
         _meshInstance.MaterialOverride = mat;
 
-        // DEBUG: make river opaque red
-        var riverMat = new StandardMaterial3D
-        {
-            AlbedoColor = Colors.Red,
-            CullMode = BaseMaterial3D.CullModeEnum.Disabled,
-            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded
-        };
-        _riverMeshInstance.MaterialOverride = riverMat;
+        _riverMeshInstance.MaterialOverride = CreateRiverMaterial();
 
         // Debug: 打印河流 mesh 顶点数
         int riverVertexCount = 0;
@@ -152,7 +142,7 @@ public partial class HexGridChunk : Node3D
         var shader = new Shader();
         shader.Code = @"
 shader_type spatial;
-render_mode blend_mix, cull_disabled, unshaded;
+render_mode blend_mix, cull_disabled, unshaded, depth_test_disabled;
 
 uniform vec4 color : source_color = vec4(0.15, 0.4, 0.8, 0.7);
 uniform float speed : hint_range(0.0, 2.0) = 0.25;
