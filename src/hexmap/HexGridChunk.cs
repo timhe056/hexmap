@@ -82,12 +82,24 @@ public partial class HexGridChunk : Node3D
         _meshInstance.Mesh = terrainMesh;
         _riverMeshInstance.Mesh = riverMesh;
 
+        // DEBUG: hide terrain to see river mesh in isolation
+        _meshInstance.Visible = false;
+
         var mat = new StandardMaterial3D
         {
             VertexColorUseAsAlbedo = true,
             CullMode = BaseMaterial3D.CullModeEnum.Disabled
         };
         _meshInstance.MaterialOverride = mat;
+
+        // DEBUG: make river opaque red
+        var riverMat = new StandardMaterial3D
+        {
+            AlbedoColor = Colors.Red,
+            CullMode = BaseMaterial3D.CullModeEnum.Disabled,
+            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded
+        };
+        _riverMeshInstance.MaterialOverride = riverMat;
 
         // Debug: 打印河流 mesh 顶点数
         int riverVertexCount = 0;
