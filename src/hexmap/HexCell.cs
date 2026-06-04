@@ -69,7 +69,7 @@ public class HexCell
 
     public bool IsUnderwater => WaterLevel > Elevation;
     public float StreamBedY => (Elevation + HexMetrics.StreamBedElevationOffset) * HexMetrics.ElevationStep;
-    public float RiverSurfaceY => (Elevation + HexMetrics.WaterElevationOffset) * HexMetrics.ElevationStep;
+    public float RiverSurfaceY => (Elevation + HexMetrics.RiverSurfaceElevationOffset) * HexMetrics.ElevationStep;
     public float WaterSurfaceY => (WaterLevel + HexMetrics.WaterElevationOffset) * HexMetrics.ElevationStep;
 
     public bool Walled { get; set; }

@@ -39,7 +39,7 @@ public static class HexMetrics
     public const float VerticalTerraceStepSize = 1f / (TerracesPerSlope + 1);
 
     /// <summary>顶点位置扰动强度（Part 4 降至 4）</summary>
-    public const float CellPerturbStrength = 4f;
+    public const float CellPerturbStrength = 0f; // 4f;
     /// <summary>高程扰动强度（Part 4）</summary>
     public const float ElevationPerturbStrength = 1.5f;
     /// <summary>Perlin 噪声采样缩放，越小噪声频率越低（地形越平缓）</summary>

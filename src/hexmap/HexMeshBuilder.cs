@@ -296,9 +296,8 @@ public static class HexMeshBuilder
                 (0.5f * HexMetrics.InnerToOuter);
             centerR = center;
         }
-        center = centerL.Lerp(centerR, 0.5f);
-        centerL = new Vector3(centerL.X, cell.StreamBedY, centerL.Z);
-        centerR = new Vector3(centerR.X, cell.StreamBedY, centerR.Z);
+        Vector3 mid = centerL.Lerp(centerR, 0.5f);
+        center = new Vector3(mid.X, cell.StreamBedY, mid.Z);
 
         EdgeVertices m = new EdgeVertices(
             centerL.Lerp(e.v1, 0.5f),
@@ -337,17 +336,20 @@ public static class HexMeshBuilder
         Vector3 riverCenter = new Vector3(center.X, cell.RiverSurfaceY, center.Z);
         Vector3 m2 = new Vector3(m.v2.X, cell.RiverSurfaceY, m.v2.Z);
         Vector3 m4 = new Vector3(m.v4.X, cell.RiverSurfaceY, m.v4.Z);
+        Vector3 prc = Perturb(riverCenter);
+        Vector3 pm2 = Perturb(m2);
+        Vector3 pm4 = Perturb(m4);
         if (reversed)
         {
-            riverSt.SetUV(new Vector2(0.5f, 0.4f)); riverSt.AddVertex(riverCenter);
-            riverSt.SetUV(new Vector2(1f, 0.2f)); riverSt.AddVertex(m4);
-            riverSt.SetUV(new Vector2(0f, 0.2f)); riverSt.AddVertex(m2);
+            riverSt.SetUV(new Vector2(0.5f, 0.4f)); riverSt.AddVertex(prc);
+            riverSt.SetUV(new Vector2(1f, 0.2f)); riverSt.AddVertex(pm4);
+            riverSt.SetUV(new Vector2(0f, 0.2f)); riverSt.AddVertex(pm2);
         }
         else
         {
-            riverSt.SetUV(new Vector2(0.5f, 0.4f)); riverSt.AddVertex(riverCenter);
-            riverSt.SetUV(new Vector2(0f, 0.6f)); riverSt.AddVertex(m2);
-            riverSt.SetUV(new Vector2(1f, 0.6f)); riverSt.AddVertex(m4);
+            riverSt.SetUV(new Vector2(0.5f, 0.4f)); riverSt.AddVertex(prc);
+            riverSt.SetUV(new Vector2(0f, 0.6f)); riverSt.AddVertex(pm2);
+            riverSt.SetUV(new Vector2(1f, 0.6f)); riverSt.AddVertex(pm4);
         }
     }
 
@@ -390,23 +392,28 @@ public static class HexMeshBuilder
         v1.Y = v2.Y = y1;
         v3.Y = v4.Y = y2;
 
+        Vector3 p1 = Perturb(v1);
+        Vector3 p2 = Perturb(v2);
+        Vector3 p3 = Perturb(v3);
+        Vector3 p4 = Perturb(v4);
+
         if (reversed)
         {
-            st.SetUV(new Vector2(1f, 0.8f - v)); st.AddVertex(v1);
-            st.SetUV(new Vector2(0f, 0.8f - v)); st.AddVertex(v2);
-            st.SetUV(new Vector2(0f, 0.6f - v)); st.AddVertex(v4);
-            st.SetUV(new Vector2(1f, 0.8f - v)); st.AddVertex(v1);
-            st.SetUV(new Vector2(0f, 0.6f - v)); st.AddVertex(v4);
-            st.SetUV(new Vector2(1f, 0.6f - v)); st.AddVertex(v3);
+            st.SetUV(new Vector2(1f, 0.8f - v)); st.AddVertex(p1);
+            st.SetUV(new Vector2(0f, 0.8f - v)); st.AddVertex(p2);
+            st.SetUV(new Vector2(0f, 0.6f - v)); st.AddVertex(p4);
+            st.SetUV(new Vector2(1f, 0.8f - v)); st.AddVertex(p1);
+            st.SetUV(new Vector2(0f, 0.6f - v)); st.AddVertex(p4);
+            st.SetUV(new Vector2(1f, 0.6f - v)); st.AddVertex(p3);
         }
         else
         {
-            st.SetUV(new Vector2(0f, v)); st.AddVertex(v1);
-            st.SetUV(new Vector2(1f, v)); st.AddVertex(v2);
-            st.SetUV(new Vector2(1f, v + 0.2f)); st.AddVertex(v4);
-            st.SetUV(new Vector2(0f, v)); st.AddVertex(v1);
-            st.SetUV(new Vector2(1f, v + 0.2f)); st.AddVertex(v4);
-            st.SetUV(new Vector2(0f, v + 0.2f)); st.AddVertex(v3);
+            st.SetUV(new Vector2(0f, v)); st.AddVertex(p1);
+            st.SetUV(new Vector2(1f, v)); st.AddVertex(p2);
+            st.SetUV(new Vector2(1f, v + 0.2f)); st.AddVertex(p4);
+            st.SetUV(new Vector2(0f, v)); st.AddVertex(p1);
+            st.SetUV(new Vector2(1f, v + 0.2f)); st.AddVertex(p4);
+            st.SetUV(new Vector2(0f, v + 0.2f)); st.AddVertex(p3);
         }
     }
 
