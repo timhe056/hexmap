@@ -410,7 +410,17 @@ public partial class HexGrid : Node3D
                     if (_previousCell != null)
                     {
                         _isDrag = true;
-                        _dragDirection = _previousCell.Coordinates.GetNeighborDirection(cell.Coordinates);
+                        // 通过邻居查找确定方向，避免坐标映射不一致
+                        _dragDirection = HexDirection.NE;
+                        for (int i = 0; i < 6; i++)
+                        {
+                            HexDirection d = (HexDirection)i;
+                            if (_previousCell.GetNeighbor(d) == cell)
+                            {
+                                _dragDirection = d;
+                                break;
+                            }
+                        }
                         GD.Print($"[HexGrid] Drag detected: {_previousCell.Coordinates} -> {cell.Coordinates}, direction={_dragDirection}");
                     }
                     _previousCell = cell;
