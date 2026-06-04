@@ -92,7 +92,7 @@ public static class HexMeshBuilder
         {
             if (cell.HasRiverThroughEdge(direction))
             {
-                e.v3.Y = cell.StreamBedY;
+                e.v3 = new Vector3(e.v3.X, cell.StreamBedY, e.v3.Z);
                 if (cell.HasRiverBeginOrEnd)
                 {
                     TriangulateWithRiverBeginOrEnd(terrainSt, riverSt, direction, cell, center, e);
@@ -197,7 +197,7 @@ public static class HexMeshBuilder
         // Part 6: 河流通过连接
         if (cell.HasRiverThroughEdge(direction))
         {
-            e2.v3.Y = neighbor.StreamBedY;
+            e2.v3 = new Vector3(e2.v3.X, neighbor.StreamBedY, e2.v3.Z);
             TriangulateRiverQuad(riverSt,
                 e1.v2, e1.v4, e2.v2, e2.v4,
                 cell.RiverSurfaceY, neighbor.RiverSurfaceY, 0.8f,
@@ -297,14 +297,15 @@ public static class HexMeshBuilder
             centerR = center;
         }
         center = centerL.Lerp(centerR, 0.5f);
-        centerL.Y = centerR.Y = cell.StreamBedY;
+        centerL = new Vector3(centerL.X, cell.StreamBedY, centerL.Z);
+        centerR = new Vector3(centerR.X, cell.StreamBedY, centerR.Z);
 
         EdgeVertices m = new EdgeVertices(
             centerL.Lerp(e.v1, 0.5f),
             centerR.Lerp(e.v5, 0.5f),
             1f / 6f
         );
-        m.v3.Y = cell.StreamBedY;
+        m.v3 = new Vector3(m.v3.X, cell.StreamBedY, m.v3.Z);
 
         TriangulateEdgeStrip(terrainSt, m, cell.Color, e, cell.Color);
 
@@ -325,7 +326,7 @@ public static class HexMeshBuilder
             center.Lerp(e.v1, 0.5f),
             center.Lerp(e.v5, 0.5f)
         );
-        m.v3.Y = e.v3.Y;
+        m.v3 = new Vector3(m.v3.X, e.v3.Y, m.v3.Z);
 
         TriangulateEdgeStrip(terrainSt, m, cell.Color, e, cell.Color);
         TriangulateEdgeFan(terrainSt, center, m, cell.Color);
@@ -333,18 +334,20 @@ public static class HexMeshBuilder
         bool reversed = cell.HasIncomingRiver;
         TriangulateRiverQuad(riverSt, m.v2, m.v4, e.v2, e.v4, cell.RiverSurfaceY, 0.6f, reversed);
 
-        center.Y = m.v2.Y = m.v4.Y = cell.RiverSurfaceY;
+        Vector3 riverCenter = new Vector3(center.X, cell.RiverSurfaceY, center.Z);
+        Vector3 m2 = new Vector3(m.v2.X, cell.RiverSurfaceY, m.v2.Z);
+        Vector3 m4 = new Vector3(m.v4.X, cell.RiverSurfaceY, m.v4.Z);
         if (reversed)
         {
-            riverSt.SetUV(new Vector2(0.5f, 0.4f)); riverSt.AddVertex(center);
-            riverSt.SetUV(new Vector2(1f, 0.2f)); riverSt.AddVertex(m.v4);
-            riverSt.SetUV(new Vector2(0f, 0.2f)); riverSt.AddVertex(m.v2);
+            riverSt.SetUV(new Vector2(0.5f, 0.4f)); riverSt.AddVertex(riverCenter);
+            riverSt.SetUV(new Vector2(1f, 0.2f)); riverSt.AddVertex(m4);
+            riverSt.SetUV(new Vector2(0f, 0.2f)); riverSt.AddVertex(m2);
         }
         else
         {
-            riverSt.SetUV(new Vector2(0.5f, 0.4f)); riverSt.AddVertex(center);
-            riverSt.SetUV(new Vector2(0f, 0.6f)); riverSt.AddVertex(m.v2);
-            riverSt.SetUV(new Vector2(1f, 0.6f)); riverSt.AddVertex(m.v4);
+            riverSt.SetUV(new Vector2(0.5f, 0.4f)); riverSt.AddVertex(riverCenter);
+            riverSt.SetUV(new Vector2(0f, 0.6f)); riverSt.AddVertex(m2);
+            riverSt.SetUV(new Vector2(1f, 0.6f)); riverSt.AddVertex(m4);
         }
     }
 
