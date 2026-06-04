@@ -36,15 +36,8 @@ public class HexCell
             _elevation = value;
             RefreshPosition();
 
-            // Part 6: 改变高程后验证河流合法性，移除上坡河流
-            if (HasOutgoingRiver && Elevation < GetNeighbor(OutgoingRiver).Elevation)
-            {
-                RemoveOutgoingRiver();
-            }
-            if (HasIncomingRiver && Elevation > GetNeighbor(IncomingRiver).Elevation)
-            {
-                RemoveIncomingRiver();
-            }
+            // Part 6 / 8: 改变高程后验证河流合法性，移除上坡或无效河流
+            ValidateRivers();
 
             /* Part 7: 高程变化后移除坡度大于 1 的道路（变成悬崖） */
             for (int i = 0; i < Roads.Length; i++)
@@ -59,7 +52,18 @@ public class HexCell
         }
     }
 
-    public int WaterLevel { get; set; }
+    private int _waterLevel;
+    public int WaterLevel
+    {
+        get => _waterLevel;
+        set
+        {
+            if (_waterLevel == value) return;
+            _waterLevel = value;
+            ValidateRivers();
+            Refresh();
+        }
+    }
 
     public HexCell[] Neighbors { get; } = new HexCell[6];
 
@@ -95,7 +99,7 @@ public class HexCell
 
     public bool IsUnderwater => WaterLevel > Elevation;
     public float StreamBedY => (Elevation + HexMetrics.StreamBedElevationOffset) * HexMetrics.ElevationStep;
-    public float RiverSurfaceY => (Elevation + HexMetrics.RiverSurfaceElevationOffset) * HexMetrics.ElevationStep;
+    public float RiverSurfaceY => (Elevation + HexMetrics.WaterElevationOffset) * HexMetrics.ElevationStep;
     public float WaterSurfaceY => (WaterLevel + HexMetrics.WaterElevationOffset) * HexMetrics.ElevationStep;
 
     public bool Walled { get; set; }
@@ -230,6 +234,26 @@ public class HexCell
             neighbor.RefreshSelfOnly();
         }
         RefreshSelfOnly();
+    }
+
+    public void ValidateRivers()
+    {
+        if (HasOutgoingRiver)
+        {
+            HexCell neighbor = GetNeighbor(OutgoingRiver);
+            if (!IsValidRiverDestination(neighbor))
+            {
+                RemoveOutgoingRiver();
+            }
+        }
+        if (HasIncomingRiver)
+        {
+            HexCell neighbor = GetNeighbor(IncomingRiver);
+            if (!neighbor.IsValidRiverDestination(this))
+            {
+                RemoveIncomingRiver();
+            }
+        }
     }
 
     private bool IsValidRiverDestination(HexCell neighbor)

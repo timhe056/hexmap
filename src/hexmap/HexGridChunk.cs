@@ -13,6 +13,8 @@ public partial class HexGridChunk : Node3D
     private MeshInstance3D _riverMeshInstance;
     /* Part 7: 道路网格实例 */
     private MeshInstance3D _roadMeshInstance;
+    /* Part 8: 水面网格实例 */
+    private MeshInstance3D _waterMeshInstance;
     private bool _needsRefresh = false;
     private Label3D[] _labels;
     /* Part 9: 地形特征管理器 */
@@ -94,17 +96,19 @@ public partial class HexGridChunk : Node3D
         /* Part 9: 清除旧特征 */
         _featureManager?.Clear();
 
-        /* Part 7: 三输出 BuildMeshes */
-        HexMeshBuilder.BuildMeshes(_cells, out Mesh terrainMesh, out Mesh riverMesh, out Mesh roadMesh);
+        /* Part 8: 四输出 BuildMeshes */
+        HexMeshBuilder.BuildMeshes(_cells, out Mesh terrainMesh, out Mesh riverMesh, out Mesh roadMesh, out Mesh waterMesh);
         _meshInstance.Mesh = terrainMesh;
         _riverMeshInstance.Mesh = riverMesh;
         _roadMeshInstance.Mesh = roadMesh;
+        _waterMeshInstance.Mesh = waterMesh;
 
         if (_meshInstance.MaterialOverride == null)
             _meshInstance.MaterialOverride = LoadTerrainMaterial();
 
         if (_riverMeshInstance.MaterialOverride == null) _riverMeshInstance.MaterialOverride = LoadRiverMaterial();
         if (_roadMeshInstance.MaterialOverride == null) _roadMeshInstance.MaterialOverride = LoadRoadMaterial();
+        if (_waterMeshInstance.MaterialOverride == null) _waterMeshInstance.MaterialOverride = LoadWaterMaterial();
 
         /* Part 9: 为每个单元格放置特征 */
         foreach (var cell in _cells)
@@ -191,6 +195,20 @@ public partial class HexGridChunk : Node3D
                 _roadMeshInstance.Owner = GetTree().EditedSceneRoot;
             }
         }
+
+        /* Part 8: 创建水面网格实例 */
+        _waterMeshInstance = GetNodeOrNull<MeshInstance3D>("Water");
+        if (_waterMeshInstance == null)
+        {
+            _waterMeshInstance = new MeshInstance3D();
+            _waterMeshInstance.Name = "Water";
+            if (_waterMeshInstance.MaterialOverride == null) _waterMeshInstance.MaterialOverride = LoadWaterMaterial();
+            AddChild(_waterMeshInstance);
+            if (Engine.IsEditorHint() && GetTree()?.EditedSceneRoot != null)
+            {
+                _waterMeshInstance.Owner = GetTree().EditedSceneRoot;
+            }
+        }
     }
 
     private static ShaderMaterial LoadRiverMaterial()
@@ -207,5 +225,11 @@ public partial class HexGridChunk : Node3D
     private static Material LoadTerrainMaterial()
     {
         return ResourceLoader.Load<ShaderMaterial>("res://assets/materials/terrain.tres");
+    }
+
+    /* Part 8: 水面材质（蓝色半透明） */
+    private static ShaderMaterial LoadWaterMaterial()
+    {
+        return ResourceLoader.Load<ShaderMaterial>("res://assets/materials/water.tres");
     }
 }

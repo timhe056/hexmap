@@ -108,6 +108,10 @@ public partial class HexGrid : Node3D
     /// <summary>是否应用高程编辑</summary>
     public bool ApplyElevation { get; set; } = true;
 
+    /* Part 8: 水位编辑 */
+    public bool ApplyWaterLevel { get; set; } = false;
+    public int ActiveWaterLevel { get; set; } = 0;
+
     /// <summary>当前颜色索引，-1 表示不涂色</summary>
     public int ActiveColorIndex { get; set; } = -1;
 
@@ -517,6 +521,10 @@ public partial class HexGrid : Node3D
         if (ApplyElevation)
         {
             cell.Elevation += isRightClick ? -ActiveElevation : ActiveElevation;
+        }
+        if (ApplyWaterLevel)
+        {
+            cell.WaterLevel += isRightClick ? -ActiveWaterLevel : ActiveWaterLevel;
         }
         if (ApplyColor && ActiveColorIndex >= 0 && !isRightClick)
         {

@@ -45,49 +45,53 @@ public static class HexMeshBuilder
 
     // ==================== 公共入口 ====================
 
-    /* Part 7: 新增 roadMesh 输出 */
-    public static void BuildMeshes(HexCell[] cells, out Mesh terrainMesh, out Mesh riverMesh, out Mesh roadMesh)
+    /* Part 8: 新增 waterMesh 输出 */
+    public static void BuildMeshes(HexCell[] cells, out Mesh terrainMesh, out Mesh riverMesh, out Mesh roadMesh, out Mesh waterMesh)
     {
         var terrainSt = new SurfaceTool();
         var riverSt = new SurfaceTool();
         var roadSt = new SurfaceTool();
+        var waterSt = new SurfaceTool();
         terrainSt.Begin(Mesh.PrimitiveType.Triangles);
         riverSt.Begin(Mesh.PrimitiveType.Triangles);
         roadSt.Begin(Mesh.PrimitiveType.Triangles);
+        waterSt.Begin(Mesh.PrimitiveType.Triangles);
 
         for (int i = 0; i < cells.Length; i++)
         {
             if (cells[i] != null)
-                TriangulateCell(cells[i], terrainSt, riverSt, roadSt);
+                TriangulateCell(cells[i], terrainSt, riverSt, roadSt, waterSt);
         }
 
         terrainSt.GenerateNormals();
         riverSt.GenerateNormals();
         roadSt.GenerateNormals();
+        waterSt.GenerateNormals();
         terrainMesh = terrainSt.Commit();
         riverMesh = riverSt.Commit();
         roadMesh = roadSt.Commit();
+        waterMesh = waterSt.Commit();
     }
 
     public static Mesh BuildMesh(HexCell[] cells)
     {
-        BuildMeshes(cells, out Mesh terrainMesh, out _, out _);
+        BuildMeshes(cells, out Mesh terrainMesh, out _, out _, out _);
         return terrainMesh;
     }
 
     // ==================== Cell / Sector ====================
 
-    /* Part 7: 新增 roadSt 参数 */
-    private static void TriangulateCell(HexCell cell, SurfaceTool terrainSt, SurfaceTool riverSt, SurfaceTool roadSt)
+    /* Part 8: 新增 waterSt 参数 */
+    private static void TriangulateCell(HexCell cell, SurfaceTool terrainSt, SurfaceTool riverSt, SurfaceTool roadSt, SurfaceTool waterSt)
     {
         for (HexDirection d = HexDirection.NE; d <= HexDirection.NW; d++)
         {
-            Triangulate(terrainSt, riverSt, roadSt, d, cell);
+            Triangulate(terrainSt, riverSt, roadSt, waterSt, d, cell);
         }
     }
 
-    /* Part 7: 新增 roadSt 参数，无河流时调用 TriangulateWithoutRiver */
-    private static void Triangulate(SurfaceTool terrainSt, SurfaceTool riverSt, SurfaceTool roadSt, HexDirection direction, HexCell cell)
+    /* Part 8: 新增 waterSt 参数 */
+    private static void Triangulate(SurfaceTool terrainSt, SurfaceTool riverSt, SurfaceTool roadSt, SurfaceTool waterSt, HexDirection direction, HexCell cell)
     {
         Vector3 center = cell.Position;
         EdgeVertices e = new EdgeVertices(
@@ -125,6 +129,12 @@ public static class HexMeshBuilder
         {
             /* Part 7: 透传 roadSt */
             TriangulateConnection(terrainSt, riverSt, roadSt, direction, cell, e);
+        }
+
+        /* Part 8: 开放水面三角化 */
+        if (cell.IsUnderwater)
+        {
+            TriangulateOpenWater(direction, cell, waterSt);
         }
     }
 
@@ -761,5 +771,31 @@ public static class HexMeshBuilder
 
         AddTriangleUnperturbed(st, v2, Perturb(left), boundary,
             c2, leftCell.Color, boundaryColor);
+    }
+
+    /* Part 8: 开放水面三角化 */
+    private static void TriangulateOpenWater(HexDirection direction, HexCell cell, SurfaceTool waterSt)
+    {
+        Vector3 center = cell.Position;
+        center.Y = cell.WaterSurfaceY;
+
+        Vector3 c1 = center + HexMetrics.GetFirstWaterCorner(direction);
+        Vector3 c2 = center + HexMetrics.GetSecondWaterCorner(direction);
+
+        AddTriangleUnperturbed(waterSt, center, c1, c2, Colors.White, Colors.White, Colors.White);
+
+        if (direction <= HexDirection.SE)
+        {
+            HexCell neighbor = cell.GetNeighbor(direction);
+            if (neighbor != null && neighbor.IsUnderwater)
+            {
+                Vector3 bridge = HexMetrics.GetWaterBridge(direction);
+
+                Vector3 e1 = c1 + bridge;
+                Vector3 e2 = c2 + bridge;
+
+                AddQuadUnperturbed(waterSt, c2, c1, e2, e1, Colors.White, Colors.White, Colors.White, Colors.White);
+            }
+        }
     }
 }

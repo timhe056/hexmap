@@ -21,10 +21,12 @@ public static class HexMetrics
     public const float ElevationStep = 3f;
     /// <summary>河流河床下沉偏移（以台阶为单位）。Part 6 加深至 -1.75</summary>
     public const float StreamBedElevationOffset = -1.75f;
-    /// <summary>河流水面下沉偏移（以台阶为单位）</summary>
-    public const float RiverSurfaceElevationOffset = -0.5f;
-    /// <summary>水面下沉偏移（以台阶为单位）。水面比 WaterLevel 低 0.5 个台阶，避免与陆地硬边冲突</summary>
+    /// <summary>水面下沉偏移（以台阶为单位）。水面比水位低 0.5 个台阶，避免与陆地硬边冲突</summary>
     public const float WaterElevationOffset = -0.5f;
+
+    /* Part 8: 水面六边形半径比例（0.6 = 比实心陆地更小，留出岸边泡沫空间） */
+    public const float WaterFactor = 0.6f;
+    public const float WaterBlendFactor = 1f - WaterFactor;
 
     public const float OuterToInner = 0.866025404f;
     public const float InnerToOuter = 1f / OuterToInner;
@@ -77,6 +79,14 @@ public static class HexMetrics
     /// <summary>桥接向量：从当前格子 solid corner 直达邻居 solid corner</summary>
     public static Vector3 GetBridge(HexDirection direction)
         => (Corners[(int)direction] + Corners[(int)direction + 1]) * BlendFactor;
+
+    /* Part 8: 水面六边形几何（半径比例为 WaterFactor = 0.6） */
+    public static Vector3 GetFirstWaterCorner(HexDirection direction)
+        => Corners[(int)direction] * WaterFactor;
+    public static Vector3 GetSecondWaterCorner(HexDirection direction)
+        => Corners[(int)direction + 1] * WaterFactor;
+    public static Vector3 GetWaterBridge(HexDirection direction)
+        => (Corners[(int)direction] + Corners[(int)direction + 1]) * WaterBlendFactor;
 
     public static Vector3 TerraceLerp(Vector3 a, Vector3 b, int step)
     {

@@ -20,6 +20,12 @@ public partial class HexMapEditor : CanvasLayer
     [Export(PropertyHint.Range, "0,6,1")]
     public int ActiveElevation { get; set; } = 0;
 
+    /* Part 8: 水位编辑 */
+    [Export]
+    public bool ApplyWaterLevel { get; set; } = false;
+    [Export(PropertyHint.Range, "0,6,1")]
+    public int ActiveWaterLevel { get; set; } = 0;
+
     [Export(PropertyHint.Range, "0,4,1")]
     public int BrushSize
     {
@@ -42,6 +48,9 @@ public partial class HexMapEditor : CanvasLayer
     private HBoxContainer _colorRow;
     private CheckBox _applyElevationCheck;
     private HSlider _elevationSlider;
+    /* Part 8: 水位 UI 控件 */
+    private CheckBox _applyWaterLevelCheck;
+    private HSlider _waterLevelSlider;
     private HSlider _brushSlider;
     private CheckBox _showLabelsCheck;
     private CheckBox _brushModeCheck;
@@ -71,7 +80,7 @@ public partial class HexMapEditor : CanvasLayer
         _panel.OffsetLeft = -220;
         _panel.OffsetTop = 10;
         _panel.OffsetRight = -10;
-        _panel.OffsetBottom = 480;
+        _panel.OffsetBottom = 520;
         _panel.MouseFilter = Control.MouseFilterEnum.Stop; // 背景不拦截鼠标事件
         AddChild(_panel);
 
@@ -130,6 +139,29 @@ public partial class HexMapEditor : CanvasLayer
         elevValueLabel.Text = ActiveElevation.ToString();
         _elevationSlider.ValueChanged += v => elevValueLabel.Text = ((int)v).ToString();
         elevRow.AddChild(elevValueLabel);
+
+        // Part 8: 水位行
+        var waterRow = new HBoxContainer();
+        vbox.AddChild(waterRow);
+
+        _applyWaterLevelCheck = new CheckBox();
+        _applyWaterLevelCheck.Text = "Water";
+        _applyWaterLevelCheck.ButtonPressed = ApplyWaterLevel;
+        _applyWaterLevelCheck.Toggled += OnWaterLevelToggled;
+        waterRow.AddChild(_applyWaterLevelCheck);
+
+        _waterLevelSlider = new HSlider();
+        _waterLevelSlider.MinValue = 0;
+        _waterLevelSlider.MaxValue = 6;
+        _waterLevelSlider.Value = ActiveWaterLevel;
+        _waterLevelSlider.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        _waterLevelSlider.ValueChanged += OnWaterLevelChanged;
+        waterRow.AddChild(_waterLevelSlider);
+
+        var waterValueLabel = new Label();
+        waterValueLabel.Text = ActiveWaterLevel.ToString();
+        _waterLevelSlider.ValueChanged += v => waterValueLabel.Text = ((int)v).ToString();
+        waterRow.AddChild(waterValueLabel);
 
         // 笔刷大小行
         var brushRow = new HBoxContainer();
@@ -255,6 +287,24 @@ public partial class HexMapEditor : CanvasLayer
         if (Grid != null)
         {
             Grid.ActiveElevation = ActiveElevation;
+        }
+    }
+
+    private void OnWaterLevelToggled(bool toggled)
+    {
+        ApplyWaterLevel = toggled;
+        if (Grid != null)
+        {
+            Grid.ApplyWaterLevel = ApplyWaterLevel;
+        }
+    }
+
+    private void OnWaterLevelChanged(double value)
+    {
+        ActiveWaterLevel = (int)value;
+        if (Grid != null)
+        {
+            Grid.ActiveWaterLevel = ActiveWaterLevel;
         }
     }
 
