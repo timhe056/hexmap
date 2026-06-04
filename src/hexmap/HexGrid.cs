@@ -382,11 +382,19 @@ public partial class HexGrid : Node3D
                 TriangulateCornerTerraces(st, right, rightCell, bottom, bottomCell, left, leftCell);
                 return;
             }
-            // FSC: Flat + Slope + Cliff
-            TriangulateCornerTerracesCliff(st, bottom, bottomCell, right, rightCell, left, leftCell);
+            TriangulateCornerCliffTerraces(st, bottom, bottomCell, left, leftCell,right, rightCell);
             return;
         }
-
+        if (leftCell.GetEdgeType(rightCell) == HexEdgeType.Slope)
+        {
+            if (leftCell.Elevation < rightCell.Elevation)
+            {
+                TriangulateCornerCliffTerraces(st, right, rightCell, bottom, bottomCell, left, leftCell);
+                return;
+            }
+            TriangulateCornerTerracesCliff(st, left, leftCell, right, rightCell, bottom, bottomCell);
+            return;
+        }
         // Flat-Flat-Flat 或 Cliff 情况：简单三角形
         AddTriangle(st, bottom, left, right, bottomCell.Color, leftCell.Color, rightCell.Color);
     }
@@ -427,10 +435,39 @@ public partial class HexGrid : Node3D
         Vector3 right, HexCell rightCell)
     {
         float b = 1f / (rightCell.Elevation - beginCell.Elevation);
+        if (b < 0)
+        {
+            b = -b;
+        }
         Vector3 boundary = begin.Lerp(right, b);
         Color boundaryColor = beginCell.Color.Lerp(rightCell.Color, b);
 
         TriangulateBoundaryTriangle(st, begin, beginCell, left, leftCell, boundary, boundaryColor);
+
+        if (leftCell.GetEdgeType(rightCell) == HexEdgeType.Slope)
+        {
+            TriangulateBoundaryTriangle(st, left, leftCell, right, rightCell, boundary, boundaryColor);
+        }
+        else
+        {
+            AddTriangle(st, left, right, boundary, leftCell.Color, rightCell.Color, boundaryColor);
+        }
+    }
+
+    private void TriangulateCornerCliffTerraces(SurfaceTool st,
+        Vector3 begin, HexCell beginCell,
+        Vector3 left, HexCell leftCell,
+        Vector3 right, HexCell rightCell)
+    {
+        float b = 1f / (leftCell.Elevation - beginCell.Elevation);
+        if (b < 0)
+        {
+            b = -b;
+        }
+        Vector3 boundary = begin.Lerp(left, b);
+        Color boundaryColor = beginCell.Color.Lerp(leftCell.Color, b);
+
+        TriangulateBoundaryTriangle(st, right, rightCell, begin, beginCell, boundary, boundaryColor);
 
         if (leftCell.GetEdgeType(rightCell) == HexEdgeType.Slope)
         {
