@@ -511,11 +511,6 @@ public partial class HexGrid : Node3D
         if (t < 0) return null;
 
         Vector3 hit = from + (to - from) * t;
-        var cell = GetCell(hit);
-        if (cell == null)
-        {
-            GD.Print($"[HexGrid] No cell at hit position {hit}");
-        }
-        return cell;
+        return GetCell(hit);
     }
 }
