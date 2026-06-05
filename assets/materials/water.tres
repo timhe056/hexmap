@@ -1,7 +1,11 @@
-[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+[gd_resource type="ShaderMaterial" load_steps=3 format=3]
 
 [ext_resource type="Shader" path="res://assets/shaders/water.gdshader" id="1_abcd3"]
+[ext_resource type="Texture2D" path="res://assets/noise.png" id="2_bcd3"]
 
 [resource]
 shader = ExtResource("1_abcd3")
 shader_parameters/color = Color(0.15, 0.4, 0.8, 0.6)
+shader_parameters/speed = 0.25
+shader_parameters/strength = 0.3
+shader_parameters/noise_texture = ExtResource("2_bcd3")

@@ -787,15 +787,38 @@ public static class HexMeshBuilder
         if (direction <= HexDirection.SE)
         {
             HexCell neighbor = cell.GetNeighbor(direction);
-            if (neighbor != null && neighbor.IsUnderwater)
+            if (neighbor != null)
             {
-                Vector3 bridge = HexMetrics.GetWaterBridge(direction);
-
-                Vector3 e1 = c1 + bridge;
-                Vector3 e2 = c2 + bridge;
-
-                AddQuadUnperturbed(waterSt, c2, c1, e2, e1, Colors.White, Colors.White, Colors.White, Colors.White);
+                if (neighbor.IsUnderwater)
+                {
+                    /* 开放水面连接桥（两个水下 cell 之间） */
+                    Vector3 bridge = HexMetrics.GetWaterBridge(direction);
+                    Vector3 e1 = c1 + bridge;
+                    Vector3 e2 = c2 + bridge;
+                    AddQuadUnperturbed(waterSt, c2, c1, e2, e1, Colors.White, Colors.White, Colors.White, Colors.White);
+                }
+                else
+                {
+                    /* Part 8.2: 岸边水体（当前水下，邻居不水下） */
+                    TriangulateShoreWater(direction, cell, neighbor, waterSt);
+                }
             }
         }
+    }
+
+    /* Part 8.2: 岸边水体 — 从当前 cell 水面边缘延伸到邻居 solid 边缘 */
+    private static void TriangulateShoreWater(HexDirection direction, HexCell cell, HexCell neighbor, SurfaceTool waterSt)
+    {
+        Vector3 c1 = cell.Position + HexMetrics.GetFirstWaterCorner(direction);
+        Vector3 c2 = cell.Position + HexMetrics.GetSecondWaterCorner(direction);
+        c1.Y = cell.WaterSurfaceY;
+        c2.Y = cell.WaterSurfaceY;
+
+        // 邻居在该方向上的 solid corner（使用 Opposite 方向，从邻居中心看回来）
+        Vector3 s1 = neighbor.Position + HexMetrics.GetFirstSolidCorner(direction.Opposite());
+        Vector3 s2 = neighbor.Position + HexMetrics.GetSecondSolidCorner(direction.Opposite());
+
+        // 连接当前水面边缘 (c2→c1) 到邻居 solid 边缘 (s1→s2)
+        AddQuadUnperturbed(waterSt, c2, c1, s1, s2, Colors.White, Colors.White, Colors.White, Colors.White);
     }
 }
