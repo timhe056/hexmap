@@ -45,53 +45,63 @@ public static class HexMeshBuilder
 
     // ==================== 公共入口 ====================
 
-    /* Part 8: 新增 waterMesh 输出 */
-    public static void BuildMeshes(HexCell[] cells, out Mesh terrainMesh, out Mesh riverMesh, out Mesh roadMesh, out Mesh waterMesh)
+    /* Part 8: 六路输出：terrain, rivers, roads, water, waterShore, estuaries */
+    public static void BuildMeshes(HexCell[] cells,
+        out Mesh terrainMesh, out Mesh riverMesh, out Mesh roadMesh,
+        out Mesh waterMesh, out Mesh waterShoreMesh, out Mesh estuaryMesh)
     {
         var terrainSt = new SurfaceTool();
         var riverSt = new SurfaceTool();
         var roadSt = new SurfaceTool();
         var waterSt = new SurfaceTool();
+        var waterShoreSt = new SurfaceTool();
+        var estuarySt = new SurfaceTool();
         terrainSt.Begin(Mesh.PrimitiveType.Triangles);
         riverSt.Begin(Mesh.PrimitiveType.Triangles);
         roadSt.Begin(Mesh.PrimitiveType.Triangles);
         waterSt.Begin(Mesh.PrimitiveType.Triangles);
+        waterShoreSt.Begin(Mesh.PrimitiveType.Triangles);
+        estuarySt.Begin(Mesh.PrimitiveType.Triangles);
 
         for (int i = 0; i < cells.Length; i++)
         {
             if (cells[i] != null)
-                TriangulateCell(cells[i], terrainSt, riverSt, roadSt, waterSt);
+                TriangulateCell(cells[i], terrainSt, riverSt, roadSt, waterSt, waterShoreSt, estuarySt);
         }
 
         terrainSt.GenerateNormals();
         riverSt.GenerateNormals();
         roadSt.GenerateNormals();
         waterSt.GenerateNormals();
+        waterShoreSt.GenerateNormals();
+        estuarySt.GenerateNormals();
         terrainMesh = terrainSt.Commit();
         riverMesh = riverSt.Commit();
         roadMesh = roadSt.Commit();
         waterMesh = waterSt.Commit();
+        waterShoreMesh = waterShoreSt.Commit();
+        estuaryMesh = estuarySt.Commit();
     }
 
     public static Mesh BuildMesh(HexCell[] cells)
     {
-        BuildMeshes(cells, out Mesh terrainMesh, out _, out _, out _);
+        BuildMeshes(cells, out Mesh terrainMesh, out _, out _, out _, out _, out _);
         return terrainMesh;
     }
 
     // ==================== Cell / Sector ====================
 
-    /* Part 8: 新增 waterSt 参数 */
-    private static void TriangulateCell(HexCell cell, SurfaceTool terrainSt, SurfaceTool riverSt, SurfaceTool roadSt, SurfaceTool waterSt)
+    private static void TriangulateCell(HexCell cell, SurfaceTool terrainSt, SurfaceTool riverSt, SurfaceTool roadSt,
+        SurfaceTool waterSt, SurfaceTool waterShoreSt, SurfaceTool estuarySt)
     {
         for (HexDirection d = HexDirection.NE; d <= HexDirection.NW; d++)
         {
-            Triangulate(terrainSt, riverSt, roadSt, waterSt, d, cell);
+            Triangulate(terrainSt, riverSt, roadSt, waterSt, waterShoreSt, estuarySt, d, cell);
         }
     }
 
-    /* Part 8: 新增 waterSt 参数 */
-    private static void Triangulate(SurfaceTool terrainSt, SurfaceTool riverSt, SurfaceTool roadSt, SurfaceTool waterSt, HexDirection direction, HexCell cell)
+    private static void Triangulate(SurfaceTool terrainSt, SurfaceTool riverSt, SurfaceTool roadSt,
+        SurfaceTool waterSt, SurfaceTool waterShoreSt, SurfaceTool estuarySt, HexDirection direction, HexCell cell)
     {
         Vector3 center = cell.Position;
         EdgeVertices e = new EdgeVertices(
@@ -134,7 +144,7 @@ public static class HexMeshBuilder
         /* Part 8: 开放水面三角化 */
         if (cell.IsUnderwater)
         {
-            TriangulateOpenWater(direction, cell, waterSt);
+            TriangulateOpenWater(direction, cell, waterSt, waterShoreSt, estuarySt);
         }
     }
 
@@ -214,6 +224,60 @@ public static class HexMeshBuilder
         st.SetUV(uv2); st.AddVertex(Perturb(v2));
     }
 
+    /* Part 8: UV 辅助方法 — 三角形 */
+    private static void AddTriangleUV(SurfaceTool st, Vector3 v1, Vector3 v2, Vector3 v3,
+        Vector2 uv1, Vector2 uv2, Vector2 uv3)
+    {
+        st.SetUV(uv1); st.AddVertex(Perturb(v1));
+        st.SetUV(uv2); st.AddVertex(Perturb(v2));
+        st.SetUV(uv3); st.AddVertex(Perturb(v3));
+    }
+
+    /* Part 8: UV 辅助方法 — 四边形（简化版：v1,v2 用 (uA,vA)，v3,v4 用 (uB,vB)） */
+    private static void AddQuadUV(SurfaceTool st, Vector3 v1, Vector3 v2, Vector3 v3, Vector3 v4,
+        float uA, float vA, float uB, float vB)
+    {
+        st.SetUV(new Vector2(uA, vA)); st.AddVertex(Perturb(v1));
+        st.SetUV(new Vector2(uB, vB)); st.AddVertex(Perturb(v4));
+        st.SetUV(new Vector2(uA, vA)); st.AddVertex(Perturb(v2));
+        st.SetUV(new Vector2(uA, vA)); st.AddVertex(Perturb(v1));
+        st.SetUV(new Vector2(uB, vB)); st.AddVertex(Perturb(v3));
+        st.SetUV(new Vector2(uB, vB)); st.AddVertex(Perturb(v4));
+    }
+
+    /* Part 8: UV 辅助方法 — 四边形（逐顶点 UV） */
+    private static void AddQuadUV(SurfaceTool st, Vector3 v1, Vector3 v2, Vector3 v3, Vector3 v4,
+        Vector2 uv1, Vector2 uv2, Vector2 uv3, Vector2 uv4)
+    {
+        st.SetUV(uv1); st.AddVertex(Perturb(v1));
+        st.SetUV(uv4); st.AddVertex(Perturb(v4));
+        st.SetUV(uv2); st.AddVertex(Perturb(v2));
+        st.SetUV(uv1); st.AddVertex(Perturb(v1));
+        st.SetUV(uv3); st.AddVertex(Perturb(v3));
+        st.SetUV(uv4); st.AddVertex(Perturb(v4));
+    }
+
+    /* Part 8: UV2 辅助方法 — 三角形（仅设置 UV2，不设 UV1） */
+    private static void AddTriangleUV2(SurfaceTool st, Vector3 v1, Vector3 v2, Vector3 v3,
+        Vector2 uv1, Vector2 uv2, Vector2 uv3)
+    {
+        st.SetUV2(uv1); st.AddVertex(Perturb(v1));
+        st.SetUV2(uv2); st.AddVertex(Perturb(v2));
+        st.SetUV2(uv3); st.AddVertex(Perturb(v3));
+    }
+
+    /* Part 8: UV2 辅助方法 — 四边形（仅设置 UV2，不设 UV1） */
+    private static void AddQuadUV2(SurfaceTool st, Vector3 v1, Vector3 v2, Vector3 v3, Vector3 v4,
+        Vector2 uv1, Vector2 uv2, Vector2 uv3, Vector2 uv4)
+    {
+        st.SetUV2(uv1); st.AddVertex(Perturb(v1));
+        st.SetUV2(uv4); st.AddVertex(Perturb(v4));
+        st.SetUV2(uv2); st.AddVertex(Perturb(v2));
+        st.SetUV2(uv1); st.AddVertex(Perturb(v1));
+        st.SetUV2(uv3); st.AddVertex(Perturb(v3));
+        st.SetUV2(uv4); st.AddVertex(Perturb(v4));
+    }
+
     // ==================== Edge ====================
 
     private static void TriangulateEdgeFan(SurfaceTool st, Vector3 center, EdgeVertices edge, Color color)
@@ -250,11 +314,34 @@ public static class HexMeshBuilder
         if (cell.HasRiverThroughEdge(direction))
         {
             e2.v3 = new Vector3(e2.v3.X, neighbor.StreamBedY, e2.v3.Z);
-            TriangulateRiverQuad(riverSt,
-                e1.v2, e1.v4, e2.v2, e2.v4,
-                cell.RiverSurfaceY, neighbor.RiverSurfaceY, 0.8f,
-                cell.HasIncomingRiver && cell.IncomingRiver == direction
-            );
+            /* Part 8: 水下隐藏河流 / 瀑布 */
+            if (!cell.IsUnderwater)
+            {
+                if (!neighbor.IsUnderwater)
+                {
+                    TriangulateRiverQuad(riverSt,
+                        e1.v2, e1.v4, e2.v2, e2.v4,
+                        cell.RiverSurfaceY, neighbor.RiverSurfaceY, 0.8f,
+                        cell.HasIncomingRiver && cell.IncomingRiver == direction
+                    );
+                }
+                /* 按教程：仅当 cell 海拔高于 neighbor 水位时才画瀑布 */
+                else if (cell.Elevation > neighbor.WaterLevel)
+                {
+                    /* 瀑布：cell 在水上，neighbor 在水下 */
+                    TriangulateWaterfallInWater(riverSt,
+                        e1.v2, e1.v4, e2.v2, e2.v4,
+                        cell.RiverSurfaceY, neighbor.RiverSurfaceY, neighbor.WaterSurfaceY);
+                }
+            }
+            /* 按教程：反向瀑布需要 neighbor 海拔高于 cell 水位 */
+            else if (!neighbor.IsUnderwater && neighbor.Elevation > cell.WaterLevel)
+            {
+                /* 反向瀑布：neighbor 在水上，cell 在水下 */
+                TriangulateWaterfallInWater(riverSt,
+                    e2.v4, e2.v2, e1.v4, e1.v2,
+                    neighbor.RiverSurfaceY, cell.RiverSurfaceY, cell.WaterSurfaceY);
+            }
         }
 
         /* Part 7: 获取道路信息 */
@@ -521,9 +608,13 @@ public static class HexMeshBuilder
         AddQuad(terrainSt, center, centerR, m.v3, m.v4, cell.Color, cell.Color, cell.Color, cell.Color);
         AddTriangle(terrainSt, centerR, m.v4, m.v5, cell.Color, cell.Color, cell.Color);
 
-        bool reversed = cell.IncomingRiver == direction;
-        TriangulateRiverQuad(riverSt, centerL, centerR, m.v2, m.v4, cell.RiverSurfaceY, 0.4f, reversed);
-        TriangulateRiverQuad(riverSt, m.v2, m.v4, e.v2, e.v4, cell.RiverSurfaceY, 0.6f, reversed);
+        /* Part 8: 水下隐藏河流 */
+        if (!cell.IsUnderwater)
+        {
+            bool reversed = cell.IncomingRiver == direction;
+            TriangulateRiverQuad(riverSt, centerL, centerR, m.v2, m.v4, cell.RiverSurfaceY, 0.4f, reversed);
+            TriangulateRiverQuad(riverSt, m.v2, m.v4, e.v2, e.v4, cell.RiverSurfaceY, 0.6f, reversed);
+        }
     }
 
     private static void TriangulateWithRiverBeginOrEnd(SurfaceTool terrainSt, SurfaceTool riverSt,
@@ -538,26 +629,30 @@ public static class HexMeshBuilder
         TriangulateEdgeStrip(terrainSt, m, cell.Color, e, cell.Color);
         TriangulateEdgeFan(terrainSt, center, m, cell.Color);
 
-        bool reversed = cell.HasIncomingRiver;
-        TriangulateRiverQuad(riverSt, m.v2, m.v4, e.v2, e.v4, cell.RiverSurfaceY, 0.6f, reversed);
+        /* Part 8: 水下隐藏河流 */
+        if (!cell.IsUnderwater)
+        {
+            bool reversed = cell.HasIncomingRiver;
+            TriangulateRiverQuad(riverSt, m.v2, m.v4, e.v2, e.v4, cell.RiverSurfaceY, 0.6f, reversed);
 
-        Vector3 riverCenter = new Vector3(center.X, cell.RiverSurfaceY, center.Z);
-        Vector3 m2 = new Vector3(m.v2.X, cell.RiverSurfaceY, m.v2.Z);
-        Vector3 m4 = new Vector3(m.v4.X, cell.RiverSurfaceY, m.v4.Z);
-        Vector3 prc = Perturb(riverCenter);
-        Vector3 pm2 = Perturb(m2);
-        Vector3 pm4 = Perturb(m4);
-        if (reversed)
-        {
-            riverSt.SetUV(new Vector2(0.5f, 0.4f)); riverSt.AddVertex(prc);
-            riverSt.SetUV(new Vector2(1f, 0.2f)); riverSt.AddVertex(pm4);
-            riverSt.SetUV(new Vector2(0f, 0.2f)); riverSt.AddVertex(pm2);
-        }
-        else
-        {
-            riverSt.SetUV(new Vector2(0.5f, 0.4f)); riverSt.AddVertex(prc);
-            riverSt.SetUV(new Vector2(0f, 0.6f)); riverSt.AddVertex(pm2);
-            riverSt.SetUV(new Vector2(1f, 0.6f)); riverSt.AddVertex(pm4);
+            Vector3 riverCenter = new Vector3(center.X, cell.RiverSurfaceY, center.Z);
+            Vector3 m2 = new Vector3(m.v2.X, cell.RiverSurfaceY, m.v2.Z);
+            Vector3 m4 = new Vector3(m.v4.X, cell.RiverSurfaceY, m.v4.Z);
+            Vector3 prc = Perturb(riverCenter);
+            Vector3 pm2 = Perturb(m2);
+            Vector3 pm4 = Perturb(m4);
+            if (reversed)
+            {
+                riverSt.SetUV(new Vector2(0.5f, 0.4f)); riverSt.AddVertex(prc);
+                riverSt.SetUV(new Vector2(1f, 0.2f)); riverSt.AddVertex(pm4);
+                riverSt.SetUV(new Vector2(0f, 0.2f)); riverSt.AddVertex(pm2);
+            }
+            else
+            {
+                riverSt.SetUV(new Vector2(0.5f, 0.4f)); riverSt.AddVertex(prc);
+                riverSt.SetUV(new Vector2(0f, 0.6f)); riverSt.AddVertex(pm2);
+                riverSt.SetUV(new Vector2(1f, 0.6f)); riverSt.AddVertex(pm4);
+            }
         }
     }
 
@@ -637,6 +732,34 @@ public static class HexMeshBuilder
         float y, float v, bool reversed)
     {
         TriangulateRiverQuad(st, v1, v2, v3, v4, y, y, v, reversed);
+    }
+
+    /* Part 8: 瀑布三角剖分 — 河流穿过水陆边界时，缩短四边形到水面高度。
+       使用 AddQuadUnperturbed + 手动 UV，匹配教程 (u: 0→1, v: 0.8→1)。 */
+    private static void TriangulateWaterfallInWater(SurfaceTool riverSt,
+        Vector3 v1, Vector3 v2, Vector3 v3, Vector3 v4,
+        float y1, float y2, float waterY)
+    {
+        v1.Y = v2.Y = y1;
+        v3.Y = v4.Y = y2;
+
+        v1 = Perturb(v1);
+        v2 = Perturb(v2);
+        v3 = Perturb(v3);
+        v4 = Perturb(v4);
+
+        float t = (waterY - y2) / (y1 - y2);
+        v3 = v3.Lerp(v1, t);
+        v4 = v4.Lerp(v2, t);
+
+        /* 手动构建四边形 + UV，匹配教程 AddQuadUV(0f, 1f, 0.8f, 1f)
+           顶部顶点 (v1,v2) → UV(0,1), 底部顶点 (v3,v4) → UV(0.8,1) */
+        riverSt.SetUV(new Vector2(0f, 1f));  riverSt.AddVertex(v1);
+        riverSt.SetUV(new Vector2(0.8f, 1f)); riverSt.AddVertex(v4);
+        riverSt.SetUV(new Vector2(0.8f, 1f)); riverSt.AddVertex(v2);
+        riverSt.SetUV(new Vector2(0f, 1f));  riverSt.AddVertex(v1);
+        riverSt.SetUV(new Vector2(0f, 1f));  riverSt.AddVertex(v3);
+        riverSt.SetUV(new Vector2(0.8f, 1f)); riverSt.AddVertex(v4);
     }
 
     // ==================== Corner ====================
@@ -785,8 +908,9 @@ public static class HexMeshBuilder
             c2, leftCell.Color, boundaryColor);
     }
 
-    /* Part 8: 开放水面三角化（按教程精确实现） */
-    private static void TriangulateOpenWater(HexDirection direction, HexCell cell, SurfaceTool waterSt)
+    /* Part 8: 开放水面三角化 */
+    private static void TriangulateOpenWater(HexDirection direction, HexCell cell,
+        SurfaceTool waterSt, SurfaceTool waterShoreSt, SurfaceTool estuarySt)
     {
         Vector3 center = cell.Position;
         center.Y = cell.WaterSurfaceY;
@@ -794,46 +918,45 @@ public static class HexMeshBuilder
         Vector3 c1 = center + HexMetrics.GetFirstWaterCorner(direction);
         Vector3 c2 = center + HexMetrics.GetSecondWaterCorner(direction);
 
-        waterSt.SetUV(new Vector2(0f, 0f));
+        /* 开放水面三角形（不含 UV，使用默认白色顶点色） */
         AddTriangle(waterSt, center, c1, c2);
 
-        if (direction <= HexDirection.SE)
+        HexCell neighbor = cell.GetNeighbor(direction);
+        if (neighbor != null)
         {
-            HexCell neighbor = cell.GetNeighbor(direction);
-            if (neighbor != null)
+            if (neighbor.IsUnderwater)
             {
-                if (neighbor.IsUnderwater)
+                /* 开放水面连接桥和角落 — 只在 <= SE 时生成，避免重复 */
+                if (direction <= HexDirection.SE)
                 {
-                    /* 开放水面连接桥（两个水下 cell 之间），使用 WaterBridge */
-                    Vector3 bridge = HexMetrics.GetWaterBridge(direction);
-                    Vector3 e1 = c1 + bridge;
-                    Vector3 e2 = c2 + bridge;
-                    AddQuad(waterSt, c1, c2, e2, e1);
+                    Vector3 waterBridge = HexMetrics.GetWaterBridge(direction);
+                    Vector3 e1 = c1 + waterBridge;
+                    Vector3 e2 = c2 + waterBridge;
+                    AddQuad(waterSt, c1, c2, e1, e2);
 
-                    /* Part 8.1: 开放水面角落三角形，使用普通 Bridge */
                     if (direction <= HexDirection.E)
                     {
                         HexCell nextNeighbor = cell.GetNeighbor(direction.Next());
                         if (nextNeighbor != null && nextNeighbor.IsUnderwater)
                         {
-                            Vector3 cornerBridge = HexMetrics.GetBridge(direction.Next());
-                            AddTriangle(waterSt, c2, e2, c2 + cornerBridge);
+                            AddTriangle(waterSt, c2, e2, c2 + HexMetrics.GetWaterBridge(direction.Next()));
                         }
                     }
                 }
-                else
-                {
-                    /* Part 8.2: 岸边水体 */
-                    TriangulateShoreWater(direction, cell, neighbor, waterSt);
-                }
+            }
+            else
+            {
+                /* 岸边水体 — 每个方向都要生成，输出到 waterShoreSt */
+                TriangulateShoreWater(direction, cell, neighbor, waterShoreSt, estuarySt);
             }
         }
     }
 
-    /* Part 8.2: 岸边水体 — 按教程精确实现。
-       使用 EdgeVertices + GetBridge(BlendFactor=0.2)，不是 GetWaterBridge。
-       e1 从 water corner 出发，e2 = e1 + bridge 覆盖 blend 区域。 */
-    private static void TriangulateShoreWater(HexDirection direction, HexCell cell, HexCell neighbor, SurfaceTool waterSt)
+    /* Part 8: 岸边水体 — "Between Water and Solid Edges" 版本。
+       e2 使用邻居 solid corners（非 bridge），e1 使用 water corners。
+       所有三角形/四边形带 UV 输出到 waterShoreSt。 */
+    private static void TriangulateShoreWater(HexDirection direction, HexCell cell, HexCell neighbor,
+        SurfaceTool waterShoreSt, SurfaceTool estuarySt)
     {
         Vector3 center = cell.Position;
         center.Y = cell.WaterSurfaceY;
@@ -843,31 +966,110 @@ public static class HexMeshBuilder
             center + HexMetrics.GetSecondWaterCorner(direction)
         );
 
-        // 中心扇形：4 个三角形
-        waterSt.SetUV(new Vector2(0f, 0f));
-        AddTriangle(waterSt, center, e1.v1, e1.v2);
-        AddTriangle(waterSt, center, e1.v2, e1.v3);
-        AddTriangle(waterSt, center, e1.v3, e1.v4);
-        AddTriangle(waterSt, center, e1.v4, e1.v5);
+        /* 中心扇形：4 个三角形，V=0（水侧） */
+        AddTriangleUV(waterShoreSt, center, e1.v1, e1.v2,
+            Vector2.Zero, Vector2.Zero, Vector2.Zero);
+        AddTriangleUV(waterShoreSt, center, e1.v2, e1.v3,
+            Vector2.Zero, Vector2.Zero, Vector2.Zero);
+        AddTriangleUV(waterShoreSt, center, e1.v3, e1.v4,
+            Vector2.Zero, Vector2.Zero, Vector2.Zero);
+        AddTriangleUV(waterShoreSt, center, e1.v4, e1.v5,
+            Vector2.Zero, Vector2.Zero, Vector2.Zero);
 
-        // Edge strip：使用普通 Bridge（BlendFactor=0.2）
-        Vector3 bridge = HexMetrics.GetBridge(direction);
+        /* e2 从邻居中心反向计算，使用 solid corners（非 bridge） */
+        Vector3 center2 = neighbor.Position;
+        center2.Y = center.Y;
         EdgeVertices e2 = new EdgeVertices(
-            e1.v1 + bridge,
-            e1.v5 + bridge
+            center2 + HexMetrics.GetSecondSolidCorner(direction.Opposite()),
+            center2 + HexMetrics.GetFirstSolidCorner(direction.Opposite())
         );
 
-        AddQuad(waterSt, e1.v1, e1.v2, e2.v1, e2.v2);
-        AddQuad(waterSt, e1.v2, e1.v3, e2.v2, e2.v3);
-        AddQuad(waterSt, e1.v3, e1.v4, e2.v3, e2.v4);
-        AddQuad(waterSt, e1.v4, e1.v5, e2.v4, e2.v5);
-
-        // 角落三角形
+        /* 检查河口 */
         HexCell nextNeighbor = cell.GetNeighbor(direction.Next());
+        bool hasRiver = cell.HasRiverThroughEdge(direction);
+
+        /* Bug fix: 按教程仅判断 hasRiver，不检查 nextNeighbor */
+        if (hasRiver)
+        {
+            /* 河口：梯形由 TriangulateEstuary 处理 */
+            TriangulateEstuary(estuarySt, e1, e2, cell.IncomingRiver == direction);
+
+            /* 河口两侧的三角形仍然加到 waterShoreSt */
+            AddTriangleUV(waterShoreSt, e1.v2, e2.v1, e1.v1,
+                new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0f));
+            AddTriangleUV(waterShoreSt, e1.v5, e2.v5, e1.v4,
+                new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0f));
+        }
+        else
+        {
+            /* 无河口：标准 4 个四边形 edge strip，内侧 V=0 外侧 V=1 */
+            AddQuadUV(waterShoreSt, e1.v1, e1.v2, e2.v1, e2.v2, 0f, 0f, 0f, 1f);
+            AddQuadUV(waterShoreSt, e1.v2, e1.v3, e2.v2, e2.v3, 0f, 0f, 0f, 1f);
+            AddQuadUV(waterShoreSt, e1.v3, e1.v4, e2.v3, e2.v4, 0f, 0f, 0f, 1f);
+            AddQuadUV(waterShoreSt, e1.v4, e1.v5, e2.v4, e2.v5, 0f, 0f, 0f, 1f);
+        }
+
+        /* Bug fix: 角落三角形移到 if/else 外部 — 教程中无论有无河口都要添加 */
         if (nextNeighbor != null)
         {
-            Vector3 cornerBridge = HexMetrics.GetBridge(direction.Next());
-            AddTriangle(waterSt, e1.v5, e2.v5, e1.v5 + cornerBridge);
+            float v3 = nextNeighbor.IsUnderwater ? 0f : 1f;
+            Vector3 third = nextNeighbor.Position + (nextNeighbor.IsUnderwater ?
+                HexMetrics.GetFirstWaterCorner(direction.Previous()) :
+                HexMetrics.GetFirstSolidCorner(direction.Previous()));
+            third.Y = center.Y;
+            AddTriangleUV(waterShoreSt, e1.v5, e2.v5, third,
+                new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, v3));
+        }
+    }
+
+    /* Part 8: 河口三角剖分 — 河流入水口的梯形区域。
+       使用独立的 estuarySt，同时设置 UV（shore/blend）和 UV2（river flow）。
+       incomingRiver 控制 UV2 的方向：入水河流从下往上流，出水河流相反。 */
+    private static void TriangulateEstuary(SurfaceTool estuarySt,
+        EdgeVertices e1, EdgeVertices e2, bool incomingRiver)
+    {
+        /* 几何体（与方向无关）: 左四边形 + 中间三角形 + 右四边形 */
+        AddQuad(estuarySt, e2.v1, e1.v2, e2.v2, e1.v3);
+        AddTriangle(estuarySt, e1.v3, e2.v2, e2.v4);
+        AddQuad(estuarySt, e1.v3, e1.v4, e2.v4, e2.v5);
+
+        /* UV: blend 因子在 x 中（侧边 = 0，中心 = 1），shore 在 y 中 */
+        AddQuadUV(estuarySt, e2.v1, e1.v2, e2.v2, e1.v3,
+            new Vector2(0f, 1f), new Vector2(0f, 0f),
+            new Vector2(1f, 1f), new Vector2(0f, 0f));
+        AddTriangleUV(estuarySt, e1.v3, e2.v2, e2.v4,
+            new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(1f, 1f));
+        AddQuadUV(estuarySt, e1.v3, e1.v4, e2.v4, e2.v5,
+            new Vector2(0f, 0f), new Vector2(0f, 0f),
+            new Vector2(1f, 1f), new Vector2(0f, 1f));
+
+        /* UV2: river flow — 入水（河流流入水体）和出水（河流流出水体）的坐标不同 */
+        if (incomingRiver)
+        {
+            AddQuadUV2(estuarySt, e2.v1, e1.v2, e2.v2, e1.v3,
+                new Vector2(1.5f, 1f), new Vector2(0.7f, 1.15f),
+                new Vector2(1f, 0.8f), new Vector2(0.5f, 1.1f));
+            AddTriangleUV2(estuarySt, e1.v3, e2.v2, e2.v4,
+                new Vector2(0.5f, 1.1f),
+                new Vector2(1f, 0.8f),
+                new Vector2(0f, 0.8f));
+            AddQuadUV2(estuarySt, e1.v3, e1.v4, e2.v4, e2.v5,
+                new Vector2(0.5f, 1.1f), new Vector2(0.3f, 1.15f),
+                new Vector2(0f, 0.8f), new Vector2(-0.5f, 1f));
+        }
+        else
+        {
+            /* 出水（反向流动）：U 镜像，V 映射到负值 */
+            AddQuadUV2(estuarySt, e2.v1, e1.v2, e2.v2, e1.v3,
+                new Vector2(-0.5f, -0.2f), new Vector2(0.3f, -0.35f),
+                new Vector2(0f, 0f), new Vector2(0.5f, -0.3f));
+            AddTriangleUV2(estuarySt, e1.v3, e2.v2, e2.v4,
+                new Vector2(0.5f, -0.3f),
+                new Vector2(0f, 0f),
+                new Vector2(1f, 0f));
+            AddQuadUV2(estuarySt, e1.v3, e1.v4, e2.v4, e2.v5,
+                new Vector2(0.5f, -0.3f), new Vector2(0.7f, -0.35f),
+                new Vector2(1f, 0f), new Vector2(1.5f, -0.2f));
         }
     }
 }
