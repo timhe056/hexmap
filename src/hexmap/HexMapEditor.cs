@@ -82,10 +82,10 @@ public partial class HexMapEditor : CanvasLayer
 
     private void BuildUI()
     {
-        /* Panel 容器：加宽到 260，高度降到 400，配合 Tab + ScrollContainer */
+        /* Panel 容器：加宽到 300，高度降到 400，配合 Tab + ScrollContainer */
         _panel = new Panel();
         _panel.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.TopRight);
-        _panel.OffsetLeft = -270;
+        _panel.OffsetLeft = -310;
         _panel.OffsetTop = 10;
         _panel.OffsetRight = -10;
         _panel.OffsetBottom = 400;
@@ -106,8 +106,16 @@ public partial class HexMapEditor : CanvasLayer
         var colorLabel = new Label { Text = "Color" };
         terrainVBox.AddChild(colorLabel);
 
+        /* 颜色按钮行：包在 ScrollContainer 里，只开水平滚动 */
+        var colorScroll = new ScrollContainer();
+        colorScroll.HorizontalScrollMode = ScrollContainer.ScrollMode.Auto;
+        colorScroll.VerticalScrollMode = ScrollContainer.ScrollMode.Disabled;
+        colorScroll.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        colorScroll.CustomMinimumSize = new Vector2(0, 44);
+        terrainVBox.AddChild(colorScroll);
+
         _colorRow = new HBoxContainer();
-        terrainVBox.AddChild(_colorRow);
+        colorScroll.AddChild(_colorRow);
         _colorRow.AddChild(CreateColorButton("---", Colors.Gray, -1));
         for (int i = 0; i < HexGrid.TerrainColors.Length; i++)
             _colorRow.AddChild(CreateColorButton("", HexGrid.TerrainColors[i], i));
@@ -212,6 +220,7 @@ public partial class HexMapEditor : CanvasLayer
 
         var checkBox = new CheckBox();
         checkBox.Text = label;
+        checkBox.CustomMinimumSize = new Vector2(52, 0);
         row.AddChild(checkBox);
 
         var slider = new HSlider();
