@@ -806,7 +806,9 @@ public static class HexMeshBuilder
         }
     }
 
-    /* Part 8.2: 岸边水体 — 从当前 cell 水面边缘延伸到邻居 solid 边缘 */
+    /* Part 8.2: 岸边水体 — 从当前 cell 水面边缘延伸到邻居 solid 边缘。
+       WaterFactor(0.6) 与 SolidFactor(0.8) 半径不同，四边形顶点在 XZ 投影上形成凹形，
+       不能用 AddQuadUnperturbed（会产生自相交），改用两个独立三角形。 */
     private static void TriangulateShoreWater(HexDirection direction, HexCell cell, HexCell neighbor, SurfaceTool waterSt)
     {
         Vector3 c1 = cell.Position + HexMetrics.GetFirstWaterCorner(direction);
@@ -818,7 +820,8 @@ public static class HexMeshBuilder
         Vector3 s1 = neighbor.Position + HexMetrics.GetFirstSolidCorner(direction.Opposite());
         Vector3 s2 = neighbor.Position + HexMetrics.GetSecondSolidCorner(direction.Opposite());
 
-        // 连接当前水面边缘 (c2→c1) 到邻居 solid 边缘 (s1→s2)
-        AddQuadUnperturbed(waterSt, c2, c1, s1, s2, Colors.White, Colors.White, Colors.White, Colors.White);
+        // 两个三角形拼成 shore 四边形，确保逆时针 winding（法向量朝上）
+        AddTriangleUnperturbed(waterSt, c2, s1, c1, Colors.White, Colors.White, Colors.White);
+        AddTriangleUnperturbed(waterSt, c2, s2, s1, Colors.White, Colors.White, Colors.White);
     }
 }
