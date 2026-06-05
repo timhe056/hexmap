@@ -157,6 +157,12 @@ public static class HexMeshBuilder
         st.SetColor(c3); st.AddVertex(Perturb(v3));
     }
 
+    /* Part 8: water mesh 简写重载（默认白色） */
+    private static void AddTriangle(SurfaceTool st, Vector3 v1, Vector3 v2, Vector3 v3)
+    {
+        AddTriangle(st, v1, v2, v3, Colors.White, Colors.White, Colors.White);
+    }
+
     private static void AddTriangleUnperturbed(SurfaceTool st, Vector3 v1, Vector3 v2, Vector3 v3, Color c1, Color c2, Color c3)
     {
         st.SetColor(c1); st.AddVertex(v1);
@@ -172,6 +178,12 @@ public static class HexMeshBuilder
         st.SetColor(c1); st.AddVertex(Perturb(v1));
         st.SetColor(c3); st.AddVertex(Perturb(v3));
         st.SetColor(c4); st.AddVertex(Perturb(v4));
+    }
+
+    /* Part 8: water mesh 简写重载（默认白色） */
+    private static void AddQuad(SurfaceTool st, Vector3 v1, Vector3 v2, Vector3 v3, Vector3 v4)
+    {
+        AddQuad(st, v1, v2, v3, v4, Colors.White, Colors.White, Colors.White, Colors.White);
     }
 
     private static void AddQuadUnperturbed(SurfaceTool st, Vector3 v1, Vector3 v2, Vector3 v3, Vector3 v4, Color c1, Color c2, Color c3, Color c4)
@@ -773,7 +785,7 @@ public static class HexMeshBuilder
             c2, leftCell.Color, boundaryColor);
     }
 
-    /* Part 8: 开放水面三角化 */
+    /* Part 8: 开放水面三角化（按教程精确实现） */
     private static void TriangulateOpenWater(HexDirection direction, HexCell cell, SurfaceTool waterSt)
     {
         Vector3 center = cell.Position;
@@ -782,7 +794,8 @@ public static class HexMeshBuilder
         Vector3 c1 = center + HexMetrics.GetFirstWaterCorner(direction);
         Vector3 c2 = center + HexMetrics.GetSecondWaterCorner(direction);
 
-        AddTriangleUnperturbed(waterSt, center, c1, c2, Colors.White, Colors.White, Colors.White);
+        waterSt.SetUV(new Vector2(0f, 0f));
+        AddTriangle(waterSt, center, c1, c2);
 
         if (direction <= HexDirection.SE)
         {
@@ -791,37 +804,70 @@ public static class HexMeshBuilder
             {
                 if (neighbor.IsUnderwater)
                 {
-                    /* 开放水面连接桥（两个水下 cell 之间） */
+                    /* 开放水面连接桥（两个水下 cell 之间），使用 WaterBridge */
                     Vector3 bridge = HexMetrics.GetWaterBridge(direction);
                     Vector3 e1 = c1 + bridge;
                     Vector3 e2 = c2 + bridge;
-                    AddQuadUnperturbed(waterSt, c2, c1, e2, e1, Colors.White, Colors.White, Colors.White, Colors.White);
+                    AddQuad(waterSt, c1, c2, e2, e1);
+
+                    /* Part 8.1: 开放水面角落三角形，使用普通 Bridge */
+                    if (direction <= HexDirection.E)
+                    {
+                        HexCell nextNeighbor = cell.GetNeighbor(direction.Next());
+                        if (nextNeighbor != null && nextNeighbor.IsUnderwater)
+                        {
+                            Vector3 cornerBridge = HexMetrics.GetBridge(direction.Next());
+                            AddTriangle(waterSt, c2, e2, c2 + cornerBridge);
+                        }
+                    }
                 }
                 else
                 {
-                    /* Part 8.2: 岸边水体（当前水下，邻居不水下） */
+                    /* Part 8.2: 岸边水体 */
                     TriangulateShoreWater(direction, cell, neighbor, waterSt);
                 }
             }
         }
     }
 
-    /* Part 8.2: 岸边水体 — 从当前 cell 水面边缘延伸到邻居 solid 边缘。
-       WaterFactor(0.6) 与 SolidFactor(0.8) 半径不同，四边形顶点在 XZ 投影上形成凹形，
-       不能用 AddQuadUnperturbed（会产生自相交），改用两个独立三角形。 */
+    /* Part 8.2: 岸边水体 — 按教程精确实现。
+       使用 EdgeVertices + GetBridge(BlendFactor=0.2)，不是 GetWaterBridge。
+       e1 从 water corner 出发，e2 = e1 + bridge 覆盖 blend 区域。 */
     private static void TriangulateShoreWater(HexDirection direction, HexCell cell, HexCell neighbor, SurfaceTool waterSt)
     {
-        Vector3 c1 = cell.Position + HexMetrics.GetFirstWaterCorner(direction);
-        Vector3 c2 = cell.Position + HexMetrics.GetSecondWaterCorner(direction);
-        c1.Y = cell.WaterSurfaceY;
-        c2.Y = cell.WaterSurfaceY;
+        Vector3 center = cell.Position;
+        center.Y = cell.WaterSurfaceY;
 
-        // 邻居在该方向上的 solid corner（使用 Opposite 方向，从邻居中心看回来）
-        Vector3 s1 = neighbor.Position + HexMetrics.GetFirstSolidCorner(direction.Opposite());
-        Vector3 s2 = neighbor.Position + HexMetrics.GetSecondSolidCorner(direction.Opposite());
+        EdgeVertices e1 = new EdgeVertices(
+            center + HexMetrics.GetFirstWaterCorner(direction),
+            center + HexMetrics.GetSecondWaterCorner(direction)
+        );
 
-        // 两个三角形拼成 shore 四边形，确保逆时针 winding（法向量朝上）
-        AddTriangleUnperturbed(waterSt, c2, s1, c1, Colors.White, Colors.White, Colors.White);
-        AddTriangleUnperturbed(waterSt, c2, s2, s1, Colors.White, Colors.White, Colors.White);
+        // 中心扇形：4 个三角形
+        waterSt.SetUV(new Vector2(0f, 0f));
+        AddTriangle(waterSt, center, e1.v1, e1.v2);
+        AddTriangle(waterSt, center, e1.v2, e1.v3);
+        AddTriangle(waterSt, center, e1.v3, e1.v4);
+        AddTriangle(waterSt, center, e1.v4, e1.v5);
+
+        // Edge strip：使用普通 Bridge（BlendFactor=0.2）
+        Vector3 bridge = HexMetrics.GetBridge(direction);
+        EdgeVertices e2 = new EdgeVertices(
+            e1.v1 + bridge,
+            e1.v5 + bridge
+        );
+
+        AddQuad(waterSt, e1.v1, e1.v2, e2.v1, e2.v2);
+        AddQuad(waterSt, e1.v2, e1.v3, e2.v2, e2.v3);
+        AddQuad(waterSt, e1.v3, e1.v4, e2.v3, e2.v4);
+        AddQuad(waterSt, e1.v4, e1.v5, e2.v4, e2.v5);
+
+        // 角落三角形
+        HexCell nextNeighbor = cell.GetNeighbor(direction.Next());
+        if (nextNeighbor != null)
+        {
+            Vector3 cornerBridge = HexMetrics.GetBridge(direction.Next());
+            AddTriangle(waterSt, e1.v5, e2.v5, e1.v5 + cornerBridge);
+        }
     }
 }
