@@ -1,3 +1,4 @@
+using System;
 using Godot;
 
 namespace HexMap;
@@ -45,26 +46,33 @@ public partial class HexMapEditor : CanvasLayer
 
     // UI 引用
     private Panel _panel;
+    private TabContainer _tabContainer;
+
+    // Terrain Tab
     private HBoxContainer _colorRow;
     private CheckBox _applyElevationCheck;
     private HSlider _elevationSlider;
-    /* Part 8: 水位 UI 控件 */
     private CheckBox _applyWaterLevelCheck;
     private HSlider _waterLevelSlider;
     private HSlider _brushSlider;
-    private CheckBox _showLabelsCheck;
-    private CheckBox _brushModeCheck;
+
+    // Features Tab
     private Button _riverIgnoreBtn;
     private Button _riverAddBtn;
     private Button _riverRemoveBtn;
-
-    /* Part 9: 特征级别 UI 控件 */
+    private Button _roadIgnoreBtn;
+    private Button _roadAddBtn;
+    private Button _roadRemoveBtn;
     private HSlider _urbanSlider;
     private Label _urbanValueLabel;
     private HSlider _farmSlider;
     private Label _farmValueLabel;
     private HSlider _plantSlider;
     private Label _plantValueLabel;
+
+    // Settings Tab
+    private CheckBox _showLabelsCheck;
+    private CheckBox _brushModeCheck;
 
     public override void _Ready()
     {
@@ -74,158 +82,154 @@ public partial class HexMapEditor : CanvasLayer
 
     private void BuildUI()
     {
-        // Panel 容器
+        /* Panel 容器：加宽到 260，高度降到 400，配合 Tab + ScrollContainer */
         _panel = new Panel();
         _panel.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.TopRight);
-        _panel.OffsetLeft = -220;
+        _panel.OffsetLeft = -270;
         _panel.OffsetTop = 10;
         _panel.OffsetRight = -10;
-        _panel.OffsetBottom = 520;
-        _panel.MouseFilter = Control.MouseFilterEnum.Stop; // 背景不拦截鼠标事件
+        _panel.OffsetBottom = 400;
+        _panel.MouseFilter = Control.MouseFilterEnum.Stop;
         AddChild(_panel);
 
-        var vbox = new VBoxContainer();
-        vbox.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-        vbox.OffsetLeft = 10;
-        vbox.OffsetTop = 10;
-        vbox.OffsetRight = -10;
-        vbox.OffsetBottom = -10;
-        _panel.AddChild(vbox);
+        _tabContainer = new TabContainer();
+        _tabContainer.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        _tabContainer.OffsetLeft = 8;
+        _tabContainer.OffsetTop = 8;
+        _tabContainer.OffsetRight = -8;
+        _tabContainer.OffsetBottom = -8;
+        _panel.AddChild(_tabContainer);
 
-        // 标题
-        var title = new Label();
-        title.Text = "Hex Map Editor";
-        title.HorizontalAlignment = HorizontalAlignment.Center;
-        vbox.AddChild(title);
+        /* ───────── Tab 1: Terrain ───────── */
+        var (_, terrainVBox) = CreateTab("Terrain");
 
-        // 颜色选择行
-        var colorLabel = new Label();
-        colorLabel.Text = "Color";
-        vbox.AddChild(colorLabel);
+        var colorLabel = new Label { Text = "Color" };
+        terrainVBox.AddChild(colorLabel);
 
         _colorRow = new HBoxContainer();
-        vbox.AddChild(_colorRow);
-
-        // "---" 按钮（不涂色）
-        var noneBtn = CreateColorButton("---", Colors.Gray, -1);
-        _colorRow.AddChild(noneBtn);
-
-        // 颜色预设按钮
+        terrainVBox.AddChild(_colorRow);
+        _colorRow.AddChild(CreateColorButton("---", Colors.Gray, -1));
         for (int i = 0; i < HexGrid.TerrainColors.Length; i++)
-        {
-            var btn = CreateColorButton("", HexGrid.TerrainColors[i], i);
-            _colorRow.AddChild(btn);
-        }
+            _colorRow.AddChild(CreateColorButton("", HexGrid.TerrainColors[i], i));
 
         // 高程行
-        var elevRow = new HBoxContainer();
-        vbox.AddChild(elevRow);
-
-        _applyElevationCheck = new CheckBox();
-        _applyElevationCheck.Text = "Elev";
-        _applyElevationCheck.ButtonPressed = ApplyElevation;
+        (_elevationSlider, _applyElevationCheck) = CreateSliderRow(terrainVBox, "Elev", 0, 6, ActiveElevation);
         _applyElevationCheck.Toggled += OnElevationToggled;
-        elevRow.AddChild(_applyElevationCheck);
+        _applyElevationCheck.ButtonPressed = ApplyElevation;
+        _elevationSlider.ValueChanged += v => { ActiveElevation = (int)v; if (Grid != null) Grid.ActiveElevation = ActiveElevation; };
 
-        _elevationSlider = new HSlider();
-        _elevationSlider.MinValue = 0;
-        _elevationSlider.MaxValue = 6;
-        _elevationSlider.Value = ActiveElevation;
-        _elevationSlider.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        _elevationSlider.ValueChanged += OnElevationChanged;
-        elevRow.AddChild(_elevationSlider);
-
-        var elevValueLabel = new Label();
-        elevValueLabel.Text = ActiveElevation.ToString();
-        _elevationSlider.ValueChanged += v => elevValueLabel.Text = ((int)v).ToString();
-        elevRow.AddChild(elevValueLabel);
-
-        // Part 8: 水位行
-        var waterRow = new HBoxContainer();
-        vbox.AddChild(waterRow);
-
-        _applyWaterLevelCheck = new CheckBox();
-        _applyWaterLevelCheck.Text = "Water";
-        _applyWaterLevelCheck.ButtonPressed = ApplyWaterLevel;
+        // 水位行
+        (_waterLevelSlider, _applyWaterLevelCheck) = CreateSliderRow(terrainVBox, "Water", 0, 6, ActiveWaterLevel);
         _applyWaterLevelCheck.Toggled += OnWaterLevelToggled;
-        waterRow.AddChild(_applyWaterLevelCheck);
-
-        _waterLevelSlider = new HSlider();
-        _waterLevelSlider.MinValue = 0;
-        _waterLevelSlider.MaxValue = 6;
-        _waterLevelSlider.Value = ActiveWaterLevel;
-        _waterLevelSlider.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        _waterLevelSlider.ValueChanged += OnWaterLevelChanged;
-        waterRow.AddChild(_waterLevelSlider);
-
-        var waterValueLabel = new Label();
-        waterValueLabel.Text = ActiveWaterLevel.ToString();
-        _waterLevelSlider.ValueChanged += v => waterValueLabel.Text = ((int)v).ToString();
-        waterRow.AddChild(waterValueLabel);
+        _applyWaterLevelCheck.ButtonPressed = ApplyWaterLevel;
+        _waterLevelSlider.ValueChanged += v => { ActiveWaterLevel = (int)v; if (Grid != null) Grid.ActiveWaterLevel = ActiveWaterLevel; };
 
         // 笔刷大小行
-        var brushRow = new HBoxContainer();
-        vbox.AddChild(brushRow);
+        (_brushSlider, _) = CreateSliderRow(terrainVBox, "Brush", 0, 4, BrushSize);
+        _brushSlider.ValueChanged += v => { BrushSize = (int)v; };
 
-        brushRow.AddChild(new Label { Text = "Brush" });
-        _brushSlider = new HSlider();
-        _brushSlider.MinValue = 0;
-        _brushSlider.MaxValue = 4;
-        _brushSlider.Value = BrushSize;
-        _brushSlider.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        _brushSlider.ValueChanged += v => BrushSize = (int)v;
-        brushRow.AddChild(_brushSlider);
+        /* ───────── Tab 2: Features ───────── */
+        var (_, featuresVBox) = CreateTab("Features");
 
-        var brushValueLabel = new Label();
-        brushValueLabel.Text = BrushSize.ToString();
-        _brushSlider.ValueChanged += v => brushValueLabel.Text = ((int)v).ToString();
-        brushRow.AddChild(brushValueLabel);
-
-        // 笔刷模式开关
-        _brushModeCheck = new CheckBox();
-        _brushModeCheck.Text = "Brush Mode (Tab)";
-        _brushModeCheck.ButtonPressed = false;
-        _brushModeCheck.Toggled += OnBrushModeToggled;
-        vbox.AddChild(_brushModeCheck);
-
-        // Part 6: 河流模式行
-        var riverLabel = new Label();
-        riverLabel.Text = "River";
-        vbox.AddChild(riverLabel);
-
+        // 河流行
+        featuresVBox.AddChild(new Label { Text = "River" });
         var riverRow = new HBoxContainer();
-        vbox.AddChild(riverRow);
-
+        featuresVBox.AddChild(riverRow);
         _riverIgnoreBtn = CreateRiverModeButton("Ignore", OptionalToggle.Ignore, true);
-        riverRow.AddChild(_riverIgnoreBtn);
         _riverAddBtn = CreateRiverModeButton("Add", OptionalToggle.Yes, false);
-        riverRow.AddChild(_riverAddBtn);
         _riverRemoveBtn = CreateRiverModeButton("Remove", OptionalToggle.No, false);
+        riverRow.AddChild(_riverIgnoreBtn);
+        riverRow.AddChild(_riverAddBtn);
         riverRow.AddChild(_riverRemoveBtn);
 
-        /* Part 9: 地形特征级别滑条 */
-        _urbanSlider = AddLevelSlider(vbox, "Urban", 0, out _urbanValueLabel, v =>
+        // 道路行
+        featuresVBox.AddChild(new Label { Text = "Road" });
+        var roadRow = new HBoxContainer();
+        featuresVBox.AddChild(roadRow);
+        _roadIgnoreBtn = CreateRoadModeButton("Ignore", OptionalToggle.Ignore, true);
+        _roadAddBtn = CreateRoadModeButton("Add", OptionalToggle.Yes, false);
+        _roadRemoveBtn = CreateRoadModeButton("Remove", OptionalToggle.No, false);
+        roadRow.AddChild(_roadIgnoreBtn);
+        roadRow.AddChild(_roadAddBtn);
+        roadRow.AddChild(_roadRemoveBtn);
+
+        // 地形特征级别滑条
+        _urbanSlider = AddLevelSlider(featuresVBox, "Urban", 0, out _urbanValueLabel, v =>
         {
             ActiveUrbanLevel = (int)v;
             if (Grid != null) Grid.ActiveUrbanLevel = ActiveUrbanLevel;
         });
-        _farmSlider = AddLevelSlider(vbox, "Farm", 0, out _farmValueLabel, v =>
+        _farmSlider = AddLevelSlider(featuresVBox, "Farm", 0, out _farmValueLabel, v =>
         {
             ActiveFarmLevel = (int)v;
             if (Grid != null) Grid.ActiveFarmLevel = ActiveFarmLevel;
         });
-        _plantSlider = AddLevelSlider(vbox, "Plant", 0, out _plantValueLabel, v =>
+        _plantSlider = AddLevelSlider(featuresVBox, "Plant", 0, out _plantValueLabel, v =>
         {
             ActivePlantLevel = (int)v;
             if (Grid != null) Grid.ActivePlantLevel = ActivePlantLevel;
         });
 
-        // Label 显示开关
+        /* ───────── Tab 3: Settings ───────── */
+        var (_, settingsVBox) = CreateTab("Settings");
+
+        _brushModeCheck = new CheckBox();
+        _brushModeCheck.Text = "Brush Mode (Tab)";
+        _brushModeCheck.ButtonPressed = false;
+        _brushModeCheck.Toggled += OnBrushModeToggled;
+        settingsVBox.AddChild(_brushModeCheck);
+
         _showLabelsCheck = new CheckBox();
         _showLabelsCheck.Text = "Show Labels";
         _showLabelsCheck.ButtonPressed = false;
         _showLabelsCheck.Toggled += OnShowLabelsToggled;
-        vbox.AddChild(_showLabelsCheck);
+        settingsVBox.AddChild(_showLabelsCheck);
+    }
+
+    /* 创建 Tab + ScrollContainer + VBoxContainer，返回 VBox 用于添加内容 */
+    private (ScrollContainer, VBoxContainer) CreateTab(string title)
+    {
+        var scroll = new ScrollContainer();
+        scroll.Name = title;
+        scroll.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        scroll.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
+
+        var vbox = new VBoxContainer();
+        vbox.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        // 给 vbox 底部留点 padding，避免最后一项贴边
+        vbox.AddThemeConstantOverride("separation", 6);
+        scroll.AddChild(vbox);
+
+        _tabContainer.AddChild(scroll);
+        return (scroll, vbox);
+    }
+
+    /* 统一封装 checkbox + slider + value-label 的行，返回 (slider, checkBox) */
+    private (HSlider, CheckBox) CreateSliderRow(VBoxContainer parent, string label, int min, int max, int initial)
+    {
+        var row = new HBoxContainer();
+        parent.AddChild(row);
+
+        var checkBox = new CheckBox();
+        checkBox.Text = label;
+        row.AddChild(checkBox);
+
+        var slider = new HSlider();
+        slider.MinValue = min;
+        slider.MaxValue = max;
+        slider.Step = 1;
+        slider.Value = initial;
+        slider.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        row.AddChild(slider);
+
+        var valueLabel = new Label();
+        valueLabel.Text = initial.ToString();
+        valueLabel.CustomMinimumSize = new Vector2(20, 0);
+        row.AddChild(valueLabel);
+
+        slider.ValueChanged += v => valueLabel.Text = ((int)v).ToString();
+
+        return (slider, checkBox);
     }
 
     private Button CreateColorButton(string text, Color color, int index)
@@ -326,7 +330,7 @@ public partial class HexMapEditor : CanvasLayer
 
     /* Part 9: 创建特征级别滑块行，返回 HSlider，通过 out 输出 Label */
     private HSlider AddLevelSlider(VBoxContainer parent, string label, int initialValue,
-        out Label valueLabel, Range.ValueChangedEventHandler onChanged)
+        out Label valueLabel, Godot.Range.ValueChangedEventHandler onChanged)
     {
         var row = new HBoxContainer();
         parent.AddChild(row);
@@ -372,5 +376,29 @@ public partial class HexMapEditor : CanvasLayer
             Grid.RiverMode = mode;
         }
         GD.Print($"[HexMapEditor] River mode = {mode}");
+    }
+
+    /* Part 7: 道路模式按钮 */
+    private Button CreateRoadModeButton(string text, OptionalToggle mode, bool pressed)
+    {
+        var btn = new Button();
+        btn.Text = text;
+        btn.ToggleMode = true;
+        btn.ButtonPressed = pressed;
+        btn.CustomMinimumSize = new Vector2(60, 28);
+        btn.Pressed += () => OnRoadModeSelected(mode, btn);
+        return btn;
+    }
+
+    private void OnRoadModeSelected(OptionalToggle mode, Button sender)
+    {
+        _roadIgnoreBtn.ButtonPressed = sender == _roadIgnoreBtn;
+        _roadAddBtn.ButtonPressed = sender == _roadAddBtn;
+        _roadRemoveBtn.ButtonPressed = sender == _roadRemoveBtn;
+        if (Grid != null)
+        {
+            Grid.RoadMode = mode;
+        }
+        GD.Print($"[HexMapEditor] Road mode = {mode}");
     }
 }

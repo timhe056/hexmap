@@ -375,6 +375,7 @@ public partial class HexGrid : Node3D
     {
         if (Engine.IsEditorHint()) return;
 
+        // 键盘响应放在 _Input（不需要等 UI）
         if (@event is InputEventKey keyEvent && keyEvent.Pressed && !keyEvent.Echo)
         {
             if (keyEvent.Keycode == Key.Tab)
@@ -398,8 +399,15 @@ public partial class HexGrid : Node3D
             }
         }
 
+    }
+
+    public override void _UnhandledInput(InputEvent @event)
+    {
+        if (Engine.IsEditorHint()) return;
+
         if (@event is InputEventMouseButton mouseButton)
         {
+
             if (mouseButton.ButtonIndex == MouseButton.Left)
             {
                 if (mouseButton.Pressed)
@@ -456,6 +464,9 @@ public partial class HexGrid : Node3D
             // Part 6: 检测拖拽方向（用于绘制河流）
             if (motion.ButtonMask.HasFlag(MouseButtonMask.Left))
             {
+                // 没有 _clickAnchor 说明按下发生在 UI 上，跳过拖拽
+                if (!_clickAnchor.HasValue) return;
+
                 var cell = RaycastToCell(motion.Position);
                 if (cell != null && cell != _previousCell)
                 {

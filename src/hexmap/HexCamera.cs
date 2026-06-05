@@ -69,31 +69,38 @@ public partial class HexCamera : Camera3D
 
     public override void _Input(InputEvent @event)
     {
-        if (@event is InputEventMouseButton mouseButton)
+        // 滚轮缩放放在 _Input 中，即使鼠标在 UI 上也能缩放
+        if (@event is InputEventMouseButton mouseBtn)
         {
-            switch (mouseButton.ButtonIndex)
+            switch (mouseBtn.ButtonIndex)
             {
-                case MouseButton.Left:
-                    if (mouseButton.Pressed)
-                    {
-                        // Part 6/7: 河流或道路编辑模式下禁用相机拖拽
-                        if (Grid != null && (Grid.RiverMode != OptionalToggle.Ignore || Grid.RoadMode != OptionalToggle.Ignore))
-                            break;
-                        _dragAnchor = GetGroundIntersection(mouseButton.Position);
-                    }
-                    else
-                    {
-                        _dragAnchor = null;
-                    }
-                    break;
-
                 case MouseButton.WheelUp:
                     AdjustZoom(-1f);
                     break;
-
                 case MouseButton.WheelDown:
                     AdjustZoom(1f);
                     break;
+            }
+        }
+    }
+
+    public override void _UnhandledInput(InputEvent @event)
+    {
+        if (@event is InputEventMouseButton mouseButton)
+        {
+            if (mouseButton.ButtonIndex == MouseButton.Left)
+            {
+                if (mouseButton.Pressed)
+                {
+                    // Part 6/7: 河流或道路编辑模式下禁用相机拖拽
+                    if (Grid != null && (Grid.RiverMode != OptionalToggle.Ignore || Grid.RoadMode != OptionalToggle.Ignore))
+                        return;
+                    _dragAnchor = GetGroundIntersection(mouseButton.Position);
+                }
+                else
+                {
+                    _dragAnchor = null;
+                }
             }
         }
         else if (@event is InputEventMouseMotion motion)
