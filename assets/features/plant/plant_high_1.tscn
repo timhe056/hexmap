@@ -1,0 +1,11 @@
+[gd_scene load_steps=3 format=3]
+
+[sub_resource type="BoxMesh" id="BoxMesh_00017"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_00017"]
+albedo_color = Color(0.16033292, 0.63235295, 0.09764275, 1)
+
+[node name="PlantHigh1" type="MeshInstance3D"]
+transform = Transform3D(1.25, 0, 0, 0, 4.5, 0, 0, 0, 1.25, 0, 0, 0)
+mesh = SubResource("BoxMesh_00017")
+surface_material_override/0 = SubResource("StandardMaterial3D_00017")

@@ -1,0 +1,10 @@
+[gd_resource type="ShaderMaterial" load_steps=3 format=3 uid="uid://cwr6c5uek7hpm"]
+
+[ext_resource type="Shader" uid="uid://c7y5npsm4humg" path="res://assets/shaders/water_shore.gdshader" id="1_wshore"]
+[ext_resource type="Texture2D" uid="uid://dcdxgv7fubbiv" path="res://assets/noise.png" id="2_wshore"]
+
+[resource]
+render_priority = 0
+shader = ExtResource("1_wshore")
+shader_parameter/color = Color(0.14901961, 0.4, 0.8, 0.47058824)
+shader_parameter/noise_texture = ExtResource("2_wshore")

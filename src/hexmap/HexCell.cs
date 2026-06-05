@@ -103,9 +103,43 @@ public class HexCell
     public float WaterSurfaceY => (WaterLevel + HexMetrics.WaterElevationOffset) * HexMetrics.ElevationStep;
 
     public bool Walled { get; set; }
-    public int UrbanLevel { get; set; }
-    public int FarmLevel { get; set; }
-    public int PlantLevel { get; set; }
+
+    private int _urbanLevel;
+    public int UrbanLevel
+    {
+        get => _urbanLevel;
+        set
+        {
+            if (_urbanLevel == value) return;
+            _urbanLevel = value;
+            Refresh();
+        }
+    }
+
+    private int _farmLevel;
+    public int FarmLevel
+    {
+        get => _farmLevel;
+        set
+        {
+            if (_farmLevel == value) return;
+            _farmLevel = value;
+            Refresh();
+        }
+    }
+
+    private int _plantLevel;
+    public int PlantLevel
+    {
+        get => _plantLevel;
+        set
+        {
+            if (_plantLevel == value) return;
+            _plantLevel = value;
+            Refresh();
+        }
+    }
+
     public int SpecialIndex { get; set; }
 
     /// <summary>所属 Chunk（Part 5）</summary>

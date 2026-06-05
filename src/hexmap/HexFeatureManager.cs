@@ -75,7 +75,7 @@ public partial class HexFeatureManager : Node3D
     }
 
     /// <summary>Part 9: 在指定位置为一个单元格添加地形特征</summary>
-    public void AddFeature(Vector3 position, HexCell cell)
+    public void AddFeature(HexCell cell, Vector3 position)
     {
         if (_urbanCollections == null || _farmCollections == null || _plantCollections == null) return;
 

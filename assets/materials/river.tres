@@ -1,10 +1,12 @@
-[gd_resource type="ShaderMaterial" load_steps=3 format=3]
+[gd_resource type="ShaderMaterial" load_steps=3 format=3 uid="uid://df56c3epe7wwb"]
 
-[ext_resource type="Shader" path="res://assets/shaders/river.gdshader" id="1_abcd2"]
-[ext_resource type="Texture2D" path="res://assets/noise.png" id="2_bcd2"]
+[ext_resource type="Shader" uid="uid://dlr28marv01vo" path="res://assets/shaders/river.gdshader" id="1_abcd2"]
+[ext_resource type="Texture2D" uid="uid://dcdxgv7fubbiv" path="res://assets/noise.png" id="2_bcd2"]
 
 [resource]
+render_priority = 1
 shader = ExtResource("1_abcd2")
-shader_parameters/color = Color(0.15, 0.4, 0.8, 0.7)
-shader_parameters/speed = 0.25
-shader_parameters/noise_texture = ExtResource("2_bcd2")
+shader_parameter/color = Color(0.14901961, 0.4, 0.8, 0.5294118)
+shader_parameter/flow_scale = 0.4
+shader_parameter/speed = 0.25
+shader_parameter/noise_texture = ExtResource("2_bcd2")

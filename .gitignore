@@ -18,3 +18,8 @@ obj/
 # OS
 .DS_Store
 Thumbs.db
+
+# AI / Editor tooling
+.claude/
+.codegraph/
+.cursor/

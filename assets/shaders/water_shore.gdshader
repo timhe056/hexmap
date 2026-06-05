@@ -13,8 +13,13 @@ void vertex() {
 }
 
 void fragment() {
+	// shore = UV.y: 0 = water side, 1 = land side
+	float shore = UV.y;
+	float foam = Foam(shore, world_pos.xz, noise_texture);
 	float waves = Waves(world_pos.xz, noise_texture);
-	vec3 c = clamp(color.rgb + waves, 0.0, 1.0);
+	waves *= 1.0 - shore;
+	float water = max(foam, waves);
+	vec3 c = clamp(color.rgb + water, 0.0, 1.0);
 	ALBEDO = c;
-	ALPHA = clamp(color.a + waves, 0.0, 1.0);
+	ALPHA = clamp(color.a + water, 0.0, 1.0);
 }

@@ -24,7 +24,7 @@ public static class HexMetrics
     /// <summary>水面下沉偏移（以台阶为单位）。水面比水位低 0.5 个台阶，避免与陆地硬边冲突</summary>
     public const float WaterElevationOffset = -0.5f;
 
-    /* Part 8: 水面六边形半径比例（0.6 = 比实心陆地更小，留出岸边泡沫空间） */
+    /* 0.6 时过渡带 0.2 倍角点长度 */
     public const float WaterFactor = 0.6f;
     public const float WaterBlendFactor = 1f - WaterFactor;
 

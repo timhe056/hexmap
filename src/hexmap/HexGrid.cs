@@ -148,6 +148,11 @@ public partial class HexGrid : Node3D
     private HexGridChunk[] _chunks;
     private MeshInstance3D _brushPreview;
 
+    /* Part 9: 统一加载的特征 prefab 集合 */
+    private HexFeatureCollection[] _urbanCollections;
+    private HexFeatureCollection[] _farmCollections;
+    private HexFeatureCollection[] _plantCollections;
+
     private int CellCountX => _chunkCountX * HexMetrics.ChunkSizeX;
     private int CellCountZ => _chunkCountZ * HexMetrics.ChunkSizeZ;
 
@@ -158,6 +163,7 @@ public partial class HexGrid : Node3D
         HexMetrics.InitializeNoise();
         /* Part 9: 初始化哈希网格 */
         HexMetrics.InitializeHashGrid(Seed);
+        LoadFeaturePrefabs();
         EnsureBrushPreview();
         _isReady = true;
         Regenerate();
@@ -227,6 +233,7 @@ public partial class HexGrid : Node3D
             {
                 var chunk = new HexGridChunk();
                 chunk.Name = $"Chunk_{x}_{z}";
+                chunk.SetFeatureCollections(_urbanCollections, _farmCollections, _plantCollections);
                 AddChild(chunk);
                 if (Engine.IsEditorHint() && GetTree()?.EditedSceneRoot != null)
                 {
@@ -235,6 +242,72 @@ public partial class HexGrid : Node3D
                 _chunks[i++] = chunk;
             }
         }
+    }
+
+    /* Part 9: 统一加载特征 prefab（只执行一次） */
+    private void LoadFeaturePrefabs()
+    {
+        _urbanCollections = new HexFeatureCollection[3];
+        _urbanCollections[0] = new HexFeatureCollection(new[] {
+            LoadPrefab("res://assets/features/urban/urban_high_1.tscn"),
+            LoadPrefab("res://assets/features/urban/urban_high_2.tscn")
+        });
+        _urbanCollections[1] = new HexFeatureCollection(new[] {
+            LoadPrefab("res://assets/features/urban/urban_medium_1.tscn"),
+            LoadPrefab("res://assets/features/urban/urban_medium_2.tscn")
+        });
+        _urbanCollections[2] = new HexFeatureCollection(new[] {
+            LoadPrefab("res://assets/features/urban/urban_low_1.tscn"),
+            LoadPrefab("res://assets/features/urban/urban_low_2.tscn")
+        });
+
+        _farmCollections = new HexFeatureCollection[3];
+        _farmCollections[0] = new HexFeatureCollection(new[] {
+            LoadPrefab("res://assets/features/farm/farm_high_1.tscn"),
+            LoadPrefab("res://assets/features/farm/farm_high_2.tscn")
+        });
+        _farmCollections[1] = new HexFeatureCollection(new[] {
+            LoadPrefab("res://assets/features/farm/farm_medium_1.tscn"),
+            LoadPrefab("res://assets/features/farm/farm_medium_2.tscn")
+        });
+        _farmCollections[2] = new HexFeatureCollection(new[] {
+            LoadPrefab("res://assets/features/farm/farm_low_1.tscn"),
+            LoadPrefab("res://assets/features/farm/farm_low_2.tscn")
+        });
+
+        _plantCollections = new HexFeatureCollection[3];
+        _plantCollections[0] = new HexFeatureCollection(new[] {
+            LoadPrefab("res://assets/features/plant/plant_high_1.tscn"),
+            LoadPrefab("res://assets/features/plant/plant_high_2.tscn")
+        });
+        _plantCollections[1] = new HexFeatureCollection(new[] {
+            LoadPrefab("res://assets/features/plant/plant_medium_1.tscn"),
+            LoadPrefab("res://assets/features/plant/plant_medium_2.tscn")
+        });
+        _plantCollections[2] = new HexFeatureCollection(new[] {
+            LoadPrefab("res://assets/features/plant/plant_low_1.tscn"),
+            LoadPrefab("res://assets/features/plant/plant_low_2.tscn")
+        });
+
+        int CountNonNull(HexFeatureCollection[] collections)
+        {
+            int count = 0;
+            foreach (var c in collections)
+            {
+                if (c.Prefabs != null)
+                    foreach (var p in c.Prefabs) if (p != null) count++;
+            }
+            return count;
+        }
+
+        GD.Print($"[HexGrid] Feature prefabs loaded: urban={CountNonNull(_urbanCollections)}, farm={CountNonNull(_farmCollections)}, plant={CountNonNull(_plantCollections)}");
+    }
+
+    private PackedScene LoadPrefab(string path)
+    {
+        var scene = ResourceLoader.Load<PackedScene>(path);
+        if (scene == null) GD.PushWarning($"[HexGrid] Failed to load prefab: {path}");
+        return scene;
     }
 
     private void CreateCells()

@@ -1,0 +1,10 @@
+[gd_resource type="ShaderMaterial" load_steps=3 format=3 uid="uid://vn6ioadejufp"]
+
+[ext_resource type="Shader" uid="uid://bjvsgre8cxvxi" path="res://assets/shaders/estuary.gdshader" id="1_estuary"]
+[ext_resource type="Texture2D" uid="uid://dcdxgv7fubbiv" path="res://assets/noise.png" id="2_estuary"]
+
+[resource]
+render_priority = 1
+shader = ExtResource("1_estuary")
+shader_parameter/color = Color(0.14901961, 0.4, 0.8, 0.56078434)
+shader_parameter/noise_texture = ExtResource("2_estuary")

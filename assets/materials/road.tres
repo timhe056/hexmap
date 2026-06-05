@@ -1,9 +1,10 @@
-[gd_resource type="ShaderMaterial" load_steps=3 format=3]
+[gd_resource type="ShaderMaterial" load_steps=3 format=3 uid="uid://bx64dmet5irpa"]
 
-[ext_resource type="Shader" path="res://assets/shaders/road.gdshader" id="1_abcd3"]
-[ext_resource type="Texture2D" path="res://assets/noise.png" id="2_bcd3"]
+[ext_resource type="Shader" uid="uid://bi8i7yh130gn" path="res://assets/shaders/road.gdshader" id="1_abcd3"]
+[ext_resource type="Texture2D" uid="uid://dcdxgv7fubbiv" path="res://assets/noise.png" id="2_bcd3"]
 
 [resource]
+render_priority = 0
 shader = ExtResource("1_abcd3")
-shader_parameters/color = Color(0.5, 0.35, 0.2, 1.0)
-shader_parameters/noise_texture = ExtResource("2_bcd3")
+shader_parameter/color = Color(0.5, 0.35, 0.2, 1)
+shader_parameter/noise_texture = ExtResource("2_bcd3")

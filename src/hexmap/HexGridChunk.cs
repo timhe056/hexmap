@@ -15,6 +15,8 @@ public partial class HexGridChunk : Node3D
     private MeshInstance3D _roadMeshInstance;
     /* Part 8: 水面网格实例 */
     private MeshInstance3D _waterMeshInstance;
+    private MeshInstance3D _waterShoreMeshInstance;
+    private MeshInstance3D _estuaryMeshInstance;
     private bool _needsRefresh = false;
     private Label3D[] _labels;
     /* Part 9: 地形特征管理器 */
@@ -26,14 +28,33 @@ public partial class HexGridChunk : Node3D
         _cells = new HexCell[HexMetrics.ChunkSizeX * HexMetrics.ChunkSizeZ];
         _labels = new Label3D[_cells.Length];
 
-        /* Part 9: 创建特征管理器子节点 */
-        _featureManager = new HexFeatureManager();
-        _featureManager.Name = "Features";
-        AddChild(_featureManager);
-        if (Engine.IsEditorHint() && GetTree()?.EditedSceneRoot != null)
+        /* Part 9: 创建特征管理器子节点（如果 SetFeatureCollections 已提前创建则跳过） */
+        if (_featureManager == null)
         {
-            _featureManager.Owner = GetTree().EditedSceneRoot;
+            _featureManager = new HexFeatureManager();
+            _featureManager.Name = "Features";
+            AddChild(_featureManager);
+            if (Engine.IsEditorHint() && GetTree()?.EditedSceneRoot != null)
+            {
+                _featureManager.Owner = GetTree().EditedSceneRoot;
+            }
         }
+    }
+
+    /* Part 9: 接收 HexGrid 统一加载的 prefab 集合 */
+    public void SetFeatureCollections(HexFeatureCollection[] urban, HexFeatureCollection[] farm, HexFeatureCollection[] plant)
+    {
+        if (_featureManager == null)
+        {
+            _featureManager = new HexFeatureManager();
+            _featureManager.Name = "Features";
+            AddChild(_featureManager);
+            if (Engine.IsEditorHint() && GetTree()?.EditedSceneRoot != null)
+            {
+                _featureManager.Owner = GetTree().EditedSceneRoot;
+            }
+        }
+        _featureManager.SetCollections(urban, farm, plant);
     }
 
     public void AddCell(int index, HexCell cell)
@@ -96,12 +117,16 @@ public partial class HexGridChunk : Node3D
         /* Part 9: 清除旧特征 */
         _featureManager?.Clear();
 
-        /* Part 8: 四输出 BuildMeshes */
-        HexMeshBuilder.BuildMeshes(_cells, out Mesh terrainMesh, out Mesh riverMesh, out Mesh roadMesh, out Mesh waterMesh);
+        /* Part 8: 六输出 BuildMeshes */
+        HexMeshBuilder.BuildMeshes(_cells,
+            out Mesh terrainMesh, out Mesh riverMesh, out Mesh roadMesh,
+            out Mesh waterMesh, out Mesh waterShoreMesh, out Mesh estuaryMesh);
         _meshInstance.Mesh = terrainMesh;
         _riverMeshInstance.Mesh = riverMesh;
         _roadMeshInstance.Mesh = roadMesh;
         _waterMeshInstance.Mesh = waterMesh;
+        _waterShoreMeshInstance.Mesh = waterShoreMesh;
+        _estuaryMeshInstance.Mesh = estuaryMesh;
 
         if (_meshInstance.MaterialOverride == null)
             _meshInstance.MaterialOverride = LoadTerrainMaterial();
@@ -109,6 +134,12 @@ public partial class HexGridChunk : Node3D
         if (_riverMeshInstance.MaterialOverride == null) _riverMeshInstance.MaterialOverride = LoadRiverMaterial();
         if (_roadMeshInstance.MaterialOverride == null) _roadMeshInstance.MaterialOverride = LoadRoadMaterial();
         if (_waterMeshInstance.MaterialOverride == null) _waterMeshInstance.MaterialOverride = LoadWaterMaterial();
+        if (_waterShoreMeshInstance.MaterialOverride == null) _waterShoreMeshInstance.MaterialOverride = LoadWaterShoreMaterial();
+        if (_estuaryMeshInstance.MaterialOverride == null) _estuaryMeshInstance.MaterialOverride = LoadEstuaryMaterial();
+
+        /* 确保 river/estuary 在 water/waterShore 之后渲染（匹配 Unity Queue=Transparent+1） */
+        _riverMeshInstance.MaterialOverride.RenderPriority = 1;
+        _estuaryMeshInstance.MaterialOverride.RenderPriority = 1;
 
         /* Part 9: 为每个单元格放置特征 */
         foreach (var cell in _cells)
@@ -138,19 +169,24 @@ public partial class HexGridChunk : Node3D
     /* Part 9: 为单个单元格放置特征 */
     private void TriangulateCellFeatures(HexCell cell)
     {
-        /* 中心特征：仅当无河流且非水下时放置 */
-        if (!cell.IsUnderwater && !cell.HasRiver)
+        /* 中心特征：仅当无河流、非水下、无道路时放置 */
+        if (!cell.IsUnderwater && !cell.HasRiver && !cell.HasRoads)
         {
-            _featureManager.AddFeature(cell.Position, cell);
+            _featureManager.AddFeature(cell, cell.Position);
         }
 
-        /* 各方向特征 */
+        /* 各方向边缘特征 */
         for (HexDirection d = HexDirection.NE; d <= HexDirection.NW; d++)
         {
-            if (!cell.IsUnderwater && (!cell.HasRiver || !cell.HasRiverThroughEdge(d)) && !cell.HasRoadThroughEdge(d))
+            if (!cell.IsUnderwater && !cell.HasRiverThroughEdge(d) && !cell.HasRoadThroughEdge(d))
             {
-                Vector3 edgePos = cell.Position * 2f + HexMetrics.GetSolidEdgeMiddle(d);
-                _featureManager.AddFeature(edgePos, cell);
+                Vector3 center = cell.Position;
+                HexMeshBuilder.EdgeVertices e = new HexMeshBuilder.EdgeVertices(
+                    center + HexMetrics.GetFirstSolidCorner(d),
+                    center + HexMetrics.GetSecondSolidCorner(d)
+                );
+                Vector3 edgePos = (center + e.v1 + e.v5) * (1f / 3f);
+                _featureManager.AddFeature(cell, edgePos);
             }
         }
     }
@@ -166,6 +202,48 @@ public partial class HexGridChunk : Node3D
             if (Engine.IsEditorHint() && GetTree()?.EditedSceneRoot != null)
             {
                 _meshInstance.Owner = GetTree().EditedSceneRoot;
+            }
+        }
+
+        /* Part 8: 创建水面网格实例 — 先于 Rivers，使河流渲染在水面之上 */
+        _waterMeshInstance = GetNodeOrNull<MeshInstance3D>("Water");
+        if (_waterMeshInstance == null)
+        {
+            _waterMeshInstance = new MeshInstance3D();
+            _waterMeshInstance.Name = "Water";
+            if (_waterMeshInstance.MaterialOverride == null) _waterMeshInstance.MaterialOverride = LoadWaterMaterial();
+            AddChild(_waterMeshInstance);
+            if (Engine.IsEditorHint() && GetTree()?.EditedSceneRoot != null)
+            {
+                _waterMeshInstance.Owner = GetTree().EditedSceneRoot;
+            }
+        }
+
+        /* Part 8: 创建岸边水体网格实例 */
+        _waterShoreMeshInstance = GetNodeOrNull<MeshInstance3D>("WaterShore");
+        if (_waterShoreMeshInstance == null)
+        {
+            _waterShoreMeshInstance = new MeshInstance3D();
+            _waterShoreMeshInstance.Name = "WaterShore";
+            if (_waterShoreMeshInstance.MaterialOverride == null) _waterShoreMeshInstance.MaterialOverride = LoadWaterShoreMaterial();
+            AddChild(_waterShoreMeshInstance);
+            if (Engine.IsEditorHint() && GetTree()?.EditedSceneRoot != null)
+            {
+                _waterShoreMeshInstance.Owner = GetTree().EditedSceneRoot;
+            }
+        }
+
+        /* Part 8: 创建河口网格实例 */
+        _estuaryMeshInstance = GetNodeOrNull<MeshInstance3D>("Estuaries");
+        if (_estuaryMeshInstance == null)
+        {
+            _estuaryMeshInstance = new MeshInstance3D();
+            _estuaryMeshInstance.Name = "Estuaries";
+            if (_estuaryMeshInstance.MaterialOverride == null) _estuaryMeshInstance.MaterialOverride = LoadEstuaryMaterial();
+            AddChild(_estuaryMeshInstance);
+            if (Engine.IsEditorHint() && GetTree()?.EditedSceneRoot != null)
+            {
+                _estuaryMeshInstance.Owner = GetTree().EditedSceneRoot;
             }
         }
 
@@ -195,20 +273,6 @@ public partial class HexGridChunk : Node3D
                 _roadMeshInstance.Owner = GetTree().EditedSceneRoot;
             }
         }
-
-        /* Part 8: 创建水面网格实例 */
-        _waterMeshInstance = GetNodeOrNull<MeshInstance3D>("Water");
-        if (_waterMeshInstance == null)
-        {
-            _waterMeshInstance = new MeshInstance3D();
-            _waterMeshInstance.Name = "Water";
-            if (_waterMeshInstance.MaterialOverride == null) _waterMeshInstance.MaterialOverride = LoadWaterMaterial();
-            AddChild(_waterMeshInstance);
-            if (Engine.IsEditorHint() && GetTree()?.EditedSceneRoot != null)
-            {
-                _waterMeshInstance.Owner = GetTree().EditedSceneRoot;
-            }
-        }
     }
 
     private static ShaderMaterial LoadRiverMaterial()
@@ -231,5 +295,17 @@ public partial class HexGridChunk : Node3D
     private static ShaderMaterial LoadWaterMaterial()
     {
         return ResourceLoader.Load<ShaderMaterial>("res://assets/materials/water.tres");
+    }
+
+    /* Part 8: 岸边水体材质（泡沫效果） */
+    private static ShaderMaterial LoadWaterShoreMaterial()
+    {
+        return ResourceLoader.Load<ShaderMaterial>("res://assets/materials/water_shore.tres");
+    }
+
+    /* Part 8: 河口材质（岸边+河流混合） */
+    private static ShaderMaterial LoadEstuaryMaterial()
+    {
+        return ResourceLoader.Load<ShaderMaterial>("res://assets/materials/estuary.tres");
     }
 }
