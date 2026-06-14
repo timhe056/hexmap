@@ -10,3 +10,4 @@ shader_parameter/color = Color(0.14901961, 0.4, 0.8, 0.5294118)
 shader_parameter/flow_scale = 0.4
 shader_parameter/speed = 0.25
 shader_parameter/noise_texture = ExtResource("2_bcd2")
+shader_parameter/debug_always_visible = false

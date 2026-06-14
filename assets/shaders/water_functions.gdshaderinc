@@ -1,7 +1,11 @@
 /*
- * Part 8: Water Functions — 水面效果共享函数库
+ * Part 8 / 27: Water Functions — 水面效果共享函数库
  * 被 water / water_shore / river / estuary 等 shader 共用
  */
+
+#include "hex_metrics.gdshaderinc"
+
+uniform float waves_scale : hint_range(0.1, 10.0, 0.1) = 3.0;
 
 // Foam: 岸边泡沫效果
 //   shore: UV.y，0=水面侧，1=陆地侧
@@ -10,7 +14,7 @@
 float Foam(float shore, vec2 worldXZ, sampler2D noiseTex) {
 	shore = sqrt(shore) * 0.9;
 	vec2 noiseUV = worldXZ + TIME * 0.25;
-	vec4 noise = texture(noiseTex, noiseUV * 0.015);
+	vec4 noise = texture(noiseTex, noiseUV * (2.0 * TILING_SCALE));
 	float distortion1 = noise.x * (1.0 - shore);
 	float foam1 = sin((shore + distortion1) * 10.0 - TIME);
 	foam1 *= foam1;
@@ -26,11 +30,11 @@ float Foam(float shore, vec2 worldXZ, sampler2D noiseTex) {
 float Waves(vec2 worldXZ, sampler2D noiseTex) {
 	vec2 uv1 = worldXZ;
 	uv1.y += TIME;
-	vec4 noise1 = texture(noiseTex, uv1 * 0.025);
+	vec4 noise1 = texture(noiseTex, uv1 * (waves_scale * TILING_SCALE));
 
 	vec2 uv2 = worldXZ;
 	uv2.x += TIME;
-	vec4 noise2 = texture(noiseTex, uv2 * 0.025);
+	vec4 noise2 = texture(noiseTex, uv2 * (waves_scale * TILING_SCALE));
 
 	float blendWave = sin(
 		(worldXZ.x + worldXZ.y) * 0.1 +

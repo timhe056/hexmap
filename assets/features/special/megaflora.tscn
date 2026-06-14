@@ -1,0 +1,30 @@
+[gd_scene load_steps=4 format=3]
+
+[sub_resource type="BoxMesh" id="BoxMesh_mega_trunk"]
+size = Vector3(1.5, 8, 1.5)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_mega"]
+albedo_color = Color(0.2, 0.6, 0.2, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_mega_canopy1"]
+size = Vector3(4, 3, 4)
+
+[sub_resource type="BoxMesh" id="BoxMesh_mega_canopy2"]
+size = Vector3(3, 2, 3)
+
+[node name="Megaflora" type="Node3D"]
+
+[node name="Trunk" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4, 0)
+mesh = SubResource("BoxMesh_mega_trunk")
+surface_material_override/0 = SubResource("StandardMaterial3D_mega")
+
+[node name="Canopy1" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 8.5, 0)
+mesh = SubResource("BoxMesh_mega_canopy1")
+surface_material_override/0 = SubResource("StandardMaterial3D_mega")
+
+[node name="Canopy2" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 10.5, 0)
+mesh = SubResource("BoxMesh_mega_canopy2")
+surface_material_override/0 = SubResource("StandardMaterial3D_mega")

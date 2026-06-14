@@ -1,6 +1,11 @@
-[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+[gd_resource type="ShaderMaterial" load_steps=3 format=3 uid="uid://bs5lbres3lhnu"]
 
-[ext_resource type="Shader" path="res://assets/shaders/terrain.gdshader" id="1_abcd1"]
+[ext_resource type="Shader" uid="uid://bo604q3d02tmq" path="res://assets/shaders/terrain.gdshader" id="1_abcd1"]
+[ext_resource type="Texture2DArray" uid="uid://jgt0ybfpf67n" path="res://assets/textures/terrain/Terrain Texture Array.png" id="2_abcd1"]
 
 [resource]
+render_priority = 0
 shader = ExtResource("1_abcd1")
+shader_parameter/grid_on = false
+shader_parameter/background_color = Color(0.40784314, 0.38039216, 0.35686275, 1)
+shader_parameter/terrain_textures = ExtResource("2_abcd1")

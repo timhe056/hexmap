@@ -1,4 +1,5 @@
 using Godot;
+using System.IO;
 
 namespace HexMap;
 
@@ -12,8 +13,30 @@ public readonly struct HexCoordinates : System.IEquatable<HexCoordinates>
     public int Z { get; }
     public int Y => -X - Z;
 
+    /// <summary>Part 2.2: hex space 中的 X 坐标，东西相邻 cell 中心距为 1。</summary>
+    public float HexX => X + Z / 2 + ((Z & 1) == 0 ? 0f : 0.5f);
+
+    /// <summary>Part 2.2: hex space 中的 Z 坐标。</summary>
+    public float HexZ => Z * HexMetrics.OuterToInner;
+
+    /// <summary>Part 3.3.0: 所在 chunk 列索引。</summary>
+    public int ColumnIndex => (X + Z / 2) / HexMetrics.ChunkSizeX;
+
     public HexCoordinates(int x, int z)
     {
+        /* Part 27: 环绕地图把 X 归约到合法范围 */
+        if (HexMetrics.Wrapping)
+        {
+            int oX = x + z / 2;
+            if (oX < 0)
+            {
+                x += HexMetrics.wrapSize;
+            }
+            else if (oX >= HexMetrics.wrapSize)
+            {
+                x -= HexMetrics.wrapSize;
+            }
+        }
         X = x;
         Z = z;
     }
@@ -27,7 +50,7 @@ public readonly struct HexCoordinates : System.IEquatable<HexCoordinates>
     /// <summary>从世界坐标反推 HexCoordinates（用于鼠标点击等）</summary>
     public static HexCoordinates FromPosition(Vector3 position)
     {
-        float x = position.X / (HexMetrics.InnerRadius * 2f);
+        float x = position.X / HexMetrics.InnerDiameter;
         float y = -x;
         float offset = position.Z / (HexMetrics.OuterRadius * 3f);
         x -= offset;
@@ -56,8 +79,59 @@ public readonly struct HexCoordinates : System.IEquatable<HexCoordinates>
 
     public int DistanceTo(HexCoordinates other)
     {
-        return (Mathf.Abs(X - other.X) + Mathf.Abs(Y - other.Y) + Mathf.Abs(Z - other.Z)) / 2;
+        int dx = X - other.X;
+        int dz = Z - other.Z;
+        int dy = -dx - dz;
+        int distance = (Mathf.Abs(dx) + Mathf.Abs(dy) + Mathf.Abs(dz)) / 2;
+
+        /* Part 27: 环绕地图取最短距离（直接 / +wrapSize / -wrapSize） */
+        if (HexMetrics.Wrapping)
+        {
+            int otherX = other.X + HexMetrics.wrapSize;
+            dx = X - otherX;
+            dy = -dx - dz;
+            int wrapped = (Mathf.Abs(dx) + Mathf.Abs(dy) + Mathf.Abs(dz)) / 2;
+            if (wrapped < distance)
+            {
+                distance = wrapped;
+            }
+            else
+            {
+                otherX -= 2 * HexMetrics.wrapSize;
+                dx = X - otherX;
+                dy = -dx - dz;
+                wrapped = (Mathf.Abs(dx) + Mathf.Abs(dy) + Mathf.Abs(dz)) / 2;
+                if (wrapped < distance)
+                {
+                    distance = wrapped;
+                }
+            }
+        }
+
+        return distance;
     }
+
+    public void Save(BinaryWriter writer)
+    {
+        writer.Write(X);
+        writer.Write(Z);
+    }
+
+    public static HexCoordinates Load(BinaryReader reader)
+    {
+        return new HexCoordinates(reader.ReadInt32(), reader.ReadInt32());
+    }
+
+    /// <summary>Part 2.3: 返回指定方向的相邻 cell 坐标。</summary>
+    public HexCoordinates Step(HexDirection direction) => direction switch
+    {
+        HexDirection.NE => new HexCoordinates(X, Z + 1),
+        HexDirection.E => new HexCoordinates(X + 1, Z),
+        HexDirection.SE => new HexCoordinates(X + 1, Z - 1),
+        HexDirection.SW => new HexCoordinates(X, Z - 1),
+        HexDirection.W => new HexCoordinates(X - 1, Z),
+        _ => new HexCoordinates(X - 1, Z + 1)
+    };
 
     /// <summary>Part 6：返回从当前坐标指向邻居坐标的方向。假设两者相邻。</summary>
     public HexDirection GetNeighborDirection(HexCoordinates other)

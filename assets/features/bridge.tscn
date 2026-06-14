@@ -1,0 +1,23 @@
+[gd_scene load_steps=3 format=3 uid="uid://l81srdngwwv5"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_bridge"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_bridge"]
+albedo_color = Color(1, 0, 0, 1)
+
+[node name="Bridge" type="Node3D"]
+
+[node name="Middle" type="MeshInstance3D" parent="."]
+transform = Transform3D(3, 0, 0, 0, 1, 0, 0, 0, 1.37, 0, 0.485, 0)
+mesh = SubResource("BoxMesh_bridge")
+surface_material_override/0 = SubResource("StandardMaterial3D_bridge")
+
+[node name="NearSlope" type="MeshInstance3D" parent="."]
+transform = Transform3D(2.99, 0, 0, 0, 0.93593675, 1.0565066, 0, -0.35216868, 2.8078115, 0, 0, -1.92)
+mesh = SubResource("BoxMesh_bridge")
+surface_material_override/0 = SubResource("StandardMaterial3D_bridge")
+
+[node name="FarSlope" type="MeshInstance3D" parent="."]
+transform = Transform3D(2.99, 0, 0, 0, 0.93540716, -1.0607202, 0, 0.35357314, 2.8062224, 0, 0, 1.92)
+mesh = SubResource("BoxMesh_bridge")
+surface_material_override/0 = SubResource("StandardMaterial3D_bridge")

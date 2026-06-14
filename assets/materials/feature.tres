@@ -1,0 +1,9 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+
+[ext_resource type="Shader" path="res://assets/shaders/feature.gdshader" id="1_feature"]
+
+[resource]
+render_priority = 1
+shader = ExtResource("1_feature")
+shader_parameter/feature_color = Color(1, 1, 1, 1)
+shader_parameter/background_color = Color(0.40784314, 0.38039216, 0.35686275, 1)

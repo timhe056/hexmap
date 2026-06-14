@@ -4,18 +4,17 @@ namespace HexMap;
 
 /// <summary>
 /// Part 5：六边形地图相机控制器。
-/// 支持 WASD 移动、QE 旋转、滚轮缩放，并限制在地图范围内。
-/// 保留鼠标左键拖拽平移。
+/// Perspective 投影，固定倾角，zoom 时只移动相机距离。
 /// </summary>
 public partial class HexCamera : Camera3D
 {
     // ==================== Inspector 参数 ====================
 
-    [Export(PropertyHint.Range, "10,300,1")]
-    public float MinSize { get; set; } = 10f;
+    [Export(PropertyHint.Range, "10,500,1")]
+    public float MinZoom { get; set; } = 20f;
 
     [Export(PropertyHint.Range, "10,500,1")]
-    public float MaxSize { get; set; } = 300f;
+    public float MaxZoom { get; set; } = 300f;
 
     [Export(PropertyHint.Range, "1,30,0.5")]
     public float ZoomStep { get; set; } = 8f;
@@ -36,12 +35,59 @@ public partial class HexCamera : Camera3D
 
     private Vector3? _dragAnchor;
     private float _rotationAngle;
+    private float _zoom = 0.5f;
+    private Vector3 _swivelPosition;
+    private float _swivelAngle;
+
+    /* Part 13: 单例引用，用于 Locked / ValidatePosition */
+    private static HexCamera _instance;
+
+    public static bool Locked
+    {
+        set
+        {
+            if (_instance != null)
+            {
+                _instance.ProcessMode = value ? ProcessModeEnum.Disabled : ProcessModeEnum.Inherit;
+            }
+        }
+    }
+
+    public static void ValidatePosition()
+    {
+        _instance?.AdjustPosition(0f, 0f, 0f);
+    }
+
+    /* Part 13: 创建/加载地图后将相机 rig 移到地图中心 */
+    public static void CenterOnGrid()
+    {
+        if (_instance == null || _instance.Grid == null) return;
+        Vector3 center = _instance.Grid.CalculateGridCenter();
+        _instance._swivelPosition = new Vector3(center.X, 0f, center.Z);
+        _instance._swivelPosition = _instance.ClampOrWrapPosition(_instance._swivelPosition);
+        _instance.ApplyZoom();
+    }
 
     // ==================== 生命周期 ====================
 
     public override void _Ready()
     {
+        _instance = this;
+
+        // rig 放在地面上，XZ 取当前相机位置
+        _swivelPosition = GlobalPosition;
+        _swivelPosition.Y = 0f;
+
         _rotationAngle = RotationDegrees.Y;
+        // 从当前 transform 的 Basis 直接提取倾角，避开 RotationDegrees.X 读取符号问题
+        _swivelAngle = Mathf.Atan2(GlobalTransform.Basis.Z.Y, GlobalTransform.Basis.Z.Z) * 180f / Mathf.Pi;
+
+        // 切换到 Perspective
+        Projection = ProjectionType.Perspective;
+        Fov = 60f;
+        Near = 0.3f;
+
+        ApplyZoom();
     }
 
     // ==================== 输入处理 ====================
@@ -113,7 +159,9 @@ public partial class HexCamera : Camera3D
                 var currentPoint = GetGroundIntersection(motion.Position);
                 if (currentPoint.HasValue)
                 {
-                    GlobalPosition += _dragAnchor.Value - currentPoint.Value;
+                    _swivelPosition += _dragAnchor.Value - currentPoint.Value;
+                    _swivelPosition = ClampOrWrapPosition(_swivelPosition);
+                    ApplyZoom();
                 }
             }
         }
@@ -123,7 +171,27 @@ public partial class HexCamera : Camera3D
 
     private void AdjustZoom(float delta)
     {
-        Size = Mathf.Clamp(Size + delta * ZoomStep, MinSize, MaxSize);
+        _zoom = Mathf.Clamp(_zoom + delta * ZoomStep * 0.01f, 0f, 1f);
+        ApplyZoom();
+    }
+
+    private void ApplyZoom()
+    {
+        float distance = Mathf.Lerp(MinZoom, MaxZoom, _zoom);
+        float rad = _swivelAngle * Mathf.Pi / 180f;
+
+        Vector3 offset = new Vector3(
+            0f,
+            Mathf.Sin(rad) * distance,
+            Mathf.Cos(rad) * distance
+        );
+
+        // 应用 Y 轴旋转
+        Basis rotY = new Basis(Vector3.Up, _rotationAngle * Mathf.Pi / 180f);
+        offset = rotY * offset;
+
+        GlobalPosition = _swivelPosition + offset;
+        LookAt(_swivelPosition, Vector3.Up);
     }
 
     private void AdjustRotation(float delta, float dt)
@@ -132,35 +200,60 @@ public partial class HexCamera : Camera3D
         if (_rotationAngle < 0f) _rotationAngle += 360f;
         else if (_rotationAngle >= 360f) _rotationAngle -= 360f;
 
-        RotationDegrees = new Vector3(RotationDegrees.X, _rotationAngle, RotationDegrees.Z);
+        ApplyZoom();
     }
 
     private void AdjustPosition(float xDelta, float zDelta, float dt)
     {
-        Vector3 direction = (GlobalTransform.Basis * new Vector3(xDelta, 0f, zDelta)).Normalized();
+        Basis rotY = new Basis(Vector3.Up, _rotationAngle * Mathf.Pi / 180f);
+        Vector3 direction = (rotY * new Vector3(xDelta, 0f, zDelta)).Normalized();
         float damping = Mathf.Max(Mathf.Abs(xDelta), Mathf.Abs(zDelta));
-        float speed = Mathf.Lerp(MoveSpeedMaxZoom, MoveSpeedMinZoom, Mathf.InverseLerp(MinSize, MaxSize, Size));
+        float speed = Mathf.Lerp(MoveSpeedMaxZoom, MoveSpeedMinZoom, _zoom);
         float distance = speed * damping * dt;
 
-        Vector3 position = GlobalPosition;
-        position += direction * distance;
-        GlobalPosition = ClampPosition(position);
+        _swivelPosition += direction * distance;
+        _swivelPosition = ClampOrWrapPosition(_swivelPosition);
+        ApplyZoom();
+    }
+
+    private Vector3 ClampOrWrapPosition(Vector3 position)
+    {
+        if (Grid == null) return position;
+        return Grid.Wrapping ? WrapPosition(position) : ClampPosition(position);
     }
 
     private Vector3 ClampPosition(Vector3 position)
     {
         if (Grid == null) return position;
 
-        // 计算地图边界
-        int cellCountX = Grid.ChunkCountX * HexMetrics.ChunkSizeX;
-        int cellCountZ = Grid.ChunkCountZ * HexMetrics.ChunkSizeZ;
-
-        float xMax = (cellCountX - 0.5f) * (HexMetrics.InnerRadius * 2f);
-        float zMax = (cellCountZ - 1) * (HexMetrics.OuterRadius * 1.5f);
+        float xMax = (Grid.CellCountX - 0.5f) * HexMetrics.InnerDiameter;
+        float zMax = (Grid.CellCountZ - 1) * (HexMetrics.OuterRadius * 1.5f);
 
         position.X = Mathf.Clamp(position.X, 0f, xMax);
         position.Z = Mathf.Clamp(position.Z, 0f, zMax);
 
+        return position;
+    }
+
+    /* Part 27: 环绕地图的相机位置循环 */
+    private Vector3 WrapPosition(Vector3 position)
+    {
+        if (Grid == null) return position;
+
+        float width = Grid.CellCountX * HexMetrics.InnerDiameter;
+        while (position.X < 0f)
+        {
+            position.X += width;
+        }
+        while (position.X > width)
+        {
+            position.X -= width;
+        }
+
+        float zMax = (Grid.CellCountZ - 1) * (HexMetrics.OuterRadius * 1.5f);
+        position.Z = Mathf.Clamp(position.Z, 0f, zMax);
+
+        Grid.CenterMap(position.X);
         return position;
     }
 
@@ -170,15 +263,14 @@ public partial class HexCamera : Camera3D
     {
         Vector3 from = ProjectRayOrigin(screenPos);
         Vector3 dir = ProjectRayNormal(screenPos);
-        Vector3 to = from + dir * 1000f;
 
-        if (Mathf.Abs(to.Y - from.Y) < 0.001f)
+        if (Mathf.Abs(dir.Y) < 0.001f)
             return null;
 
-        float t = -from.Y / (to.Y - from.Y);
+        float t = -from.Y / dir.Y;
         if (t < 0f)
             return null;
 
-        return from + (to - from) * t;
+        return from + dir * t;
     }
 }

@@ -1,0 +1,37 @@
+[gd_scene load_steps=3 format=3]
+
+[sub_resource type="BoxMesh" id="BoxMesh_castle_center"]
+size = Vector3(6, 4, 6)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_castle"]
+albedo_color = Color(1.0, 0.0, 0.0, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_castle_tower"]
+size = Vector3(1, 4, 1)
+
+[node name="Castle" type="Node3D"]
+
+[node name="Center" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0)
+mesh = SubResource("BoxMesh_castle_center")
+surface_material_override/0 = SubResource("StandardMaterial3D_castle")
+
+[node name="Tower1" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 2, 2.5)
+mesh = SubResource("BoxMesh_castle_tower")
+surface_material_override/0 = SubResource("StandardMaterial3D_castle")
+
+[node name="Tower2" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.5, 2, 2.5)
+mesh = SubResource("BoxMesh_castle_tower")
+surface_material_override/0 = SubResource("StandardMaterial3D_castle")
+
+[node name="Tower3" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 2, -2.5)
+mesh = SubResource("BoxMesh_castle_tower")
+surface_material_override/0 = SubResource("StandardMaterial3D_castle")
+
+[node name="Tower4" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.5, 2, -2.5)
+mesh = SubResource("BoxMesh_castle_tower")
+surface_material_override/0 = SubResource("StandardMaterial3D_castle")

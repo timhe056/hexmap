@@ -11,6 +11,16 @@ public static class HexMetrics
     public const float OuterRadius = 10f;
     /// <summary>六边形内切圆半径 = OuterRadius * √3/2，即边到中心的距离</summary>
     public const float InnerRadius = OuterRadius * 0.866025404f;
+    /// <summary>相邻六边形中心的东西向距离 = InnerRadius * 2</summary>
+    public const float InnerDiameter = InnerRadius * 2f;
+
+    // ==================== Part 4.1.0: 拖拽 sticky radius ====================
+
+    /// <summary>拖拽时吸附到上一个 cell 的半径系数</summary>
+    public const float StickyFactor = 1.25f;
+
+    /// <summary>拖拽时吸附到上一个 cell 的半径（XZ 平面）</summary>
+    public const float StickyRadius = OuterRadius * StickyFactor;
 
     /// <summary>实心六边形占外接圆半径的比例（Part 4 调至 0.8）</summary>
     public const float SolidFactor = 0.8f;
@@ -40,12 +50,33 @@ public static class HexMetrics
     /// <summary>斜坡垂直插值步长（Y轴），每步升高 1/(TerracesPerSlope+1)</summary>
     public const float VerticalTerraceStepSize = 1f / (TerracesPerSlope + 1);
 
+    // ==================== Part 10: 城墙常量 ====================
+
+    /// <summary>城墙高度</summary>
+    public const float WallHeight = 4f;
+    /// <summary>城墙厚度</summary>
+    public const float WallThickness = 0.75f;
+    /// <summary>城墙高程偏移（跟随阶梯地形）</summary>
+    public const float WallElevationOffset = VerticalTerraceStepSize;
+    /// <summary>城墙底部 Y 偏移（负值插入地面，消除间隙与 Z-fighting）</summary>
+    public const float WallYOffset = -1f;
+
+    /// <summary>城墙塔楼放置阈值（Part 11）</summary>
+    public const float WallTowerThreshold = 0.5f;
+    /// <summary>桥梁设计长度（Part 11）</summary>
+    public const float BridgeDesignLength = 7f;
+
     /// <summary>顶点位置扰动强度（Part 4 降至 4）</summary>
     public const float CellPerturbStrength = 4f;
     /// <summary>高程扰动强度（Part 4）</summary>
     public const float ElevationPerturbStrength = 1.5f;
     /// <summary>Perlin 噪声采样缩放，越小噪声频率越低（地形越平缓）</summary>
     public const float NoiseScale = 0.003f;
+
+    /* Part 27: 东西向环绕尺寸（以 cell 数为单位）。0 表示不环绕。 */
+    public static int wrapSize;
+    public static bool Wrapping => wrapSize > 0;
+
     /// <summary>每个 Chunk 的宽度（格子数）</summary>
     public const int ChunkSizeX = 5;
     /// <summary>每个 Chunk 的高度（格子数）</summary>
@@ -123,7 +154,7 @@ public static class HexMetrics
         _noise.Frequency = 1.0f;
     }
 
-    /// <summary>Part 4：根据世界坐标采样噪声（4 通道）</summary>
+    /// <summary>Part 4 / 27：根据世界坐标采样噪声（4 通道）。环绕地图在东边缘与西侧噪声混合。</summary>
     public static Vector4 SampleNoise(Vector3 position)
     {
         if (_noise == null) return new Vector4(0.5f, 0.5f, 0.5f, 0.5f);
@@ -134,7 +165,21 @@ public static class HexMetrics
         float g = _noise.GetNoise2D(x + 1000f, z) * 0.5f + 0.5f;
         float b = _noise.GetNoise2D(x, z + 1000f) * 0.5f + 0.5f;
         float a = _noise.GetNoise2D(x + 1000f, z + 1000f) * 0.5f + 0.5f;
-        return new Vector4(r, g, b, a);
+        Vector4 sample = new Vector4(r, g, b, a);
+
+        if (Wrapping && position.X < InnerDiameter * 1.5f)
+        {
+            float x2 = (position.X + wrapSize * InnerDiameter) * NoiseScale;
+            float r2 = _noise.GetNoise2D(x2, z) * 0.5f + 0.5f;
+            float g2 = _noise.GetNoise2D(x2 + 1000f, z) * 0.5f + 0.5f;
+            float b2 = _noise.GetNoise2D(x2, z + 1000f) * 0.5f + 0.5f;
+            float a2 = _noise.GetNoise2D(x2 + 1000f, z + 1000f) * 0.5f + 0.5f;
+            Vector4 sample2 = new Vector4(r2, g2, b2, a2);
+            float t = position.X * (1f / InnerDiameter) - 0.5f;
+            sample = sample2.Lerp(sample, t);
+        }
+
+        return sample;
     }
 
     // ==================== Part 9: 哈希网格（确定性随机） ====================
@@ -180,6 +225,11 @@ public static class HexMetrics
         return position;
     }
 
+    // ==================== Part 12: 地形颜色数组 ====================
+
+    /// <summary>地形颜色数组，由 HexGrid 在初始化时注入</summary>
+    public static Color[] Colors;
+
     // ==================== Part 9: 特征阈值系统 ====================
 
     /// <summary>
@@ -197,6 +247,34 @@ public static class HexMetrics
     public static float[] GetFeatureThresholds(int level)
     {
         return FeatureThresholds[level];
+    }
+
+    // ==================== Part 10: 城墙工具方法 ====================
+
+    /// <summary>
+    /// 城墙高程插值：在 near 和 far 之间按阶梯偏移插值 Y，
+    /// XZ 取中点，使城墙跟随地形阶梯而非直线跨越。
+    /// </summary>
+    public static Vector3 WallLerp(Vector3 near, Vector3 far)
+    {
+        near.X += (far.X - near.X) * 0.5f;
+        near.Z += (far.Z - near.Z) * 0.5f;
+        float v = near.Y < far.Y ? WallElevationOffset : (1f - WallElevationOffset);
+        near.Y += (far.Y - near.Y) * v + WallYOffset;
+        return near;
+    }
+
+    /// <summary>
+    /// 计算城墙厚度偏移向量：沿 near→far 方向在 XZ 平面上归一化后，
+    /// 乘以厚度的一半，用于构建城墙内外两侧面。
+    /// </summary>
+    public static Vector3 WallThicknessOffset(Vector3 near, Vector3 far)
+    {
+        Vector3 offset;
+        offset.X = far.X - near.X;
+        offset.Y = 0f;
+        offset.Z = far.Z - near.Z;
+        return offset.Normalized() * (WallThickness * 0.5f);
     }
 }
 

@@ -12,14 +12,32 @@ config_version=5
 
 config/name="test"
 run/main_scene="uid://dccb4ue0ohq1m"
-config/features=PackedStringArray("4.5", "C#", "GL Compatibility")
+config/features=PackedStringArray("4.5", "C#", "Forward Plus")
 config/icon="res://icon.svg"
 
 [dotnet]
 
 project/assembly_name="test"
 
-[rendering]
+[editor_plugins]
 
-renderer/rendering_method="gl_compatibility"
-renderer/rendering_method.mobile="gl_compatibility"
+enabled=PackedStringArray()
+
+[shader_globals]
+
+hex_cell_data={
+"type": "sampler2D",
+"value": ""
+}
+hex_cell_data_texel_size={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
+debug_always_visible={
+"type": "bool",
+"value": false
+}
+_CellHighlighting={
+"type": "vec4",
+"value": Vector4(0, 0, -1, 0)
+}
